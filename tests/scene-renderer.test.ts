@@ -222,4 +222,21 @@ describe('SceneRenderer', () => {
     expect(renderer.camera.aspect).toBe(1);
     expect(testState.size).toEqual([0, 0]);
   });
+
+  it('renders the tile showcase world in demo mode without touching the earth globe', async () => {
+    const { SceneRenderer } = await import('@/rendering/SceneRenderer');
+    const container = {
+      clientWidth: 800,
+      clientHeight: 600,
+      append: vi.fn(),
+    } as unknown as HTMLElement;
+
+    const renderer = new SceneRenderer(container, 'demo');
+
+    expect(renderer.world.children).toHaveLength(1);
+    const globe = renderer.world.children[0] as unknown as {
+      userData: { cellIds: readonly string[] };
+    };
+    expect(globe.userData.cellIds.length).toBeGreaterThan(0);
+  });
 });

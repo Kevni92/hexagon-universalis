@@ -22,6 +22,18 @@ npm run dev
 
 Vite zeigt anschließend die lokale URL an. Die Startseite rendert eine rotierende Three.js-Testgeometrie und reagiert auf Größenänderungen des Browserfensters.
 
+### Tile-Showcase-Welt (Demo-Modus)
+
+Standardmäßig lädt die Anwendung die echte Erdkugel. Über den Query-Parameter
+`?world=demo` (z. B. `http://localhost:5173/?world=demo`) lässt sich
+stattdessen eine separate Showcase-Welt laden, die jeden Tile-Typ aus dem
+visuellen Katalog (`src/data/tileCatalog.ts`) auf einer eigenen,
+geodätischen Testkugel mit 42 Zellen (Frequenzstufe 2) zeigt. Jeder Tile-Typ
+erhält dabei `floor(42 / 24)` oder `ceil(42 / 24)` Zellen. Die Demo verwendet
+keine realen Geographie-, Höhen-, Fluss- oder Politikdaten und ist im
+Statusbereich eindeutig mit „Tile-Demo – keine reale Erde" gekennzeichnet.
+Der reale Erdmodus bleibt davon unverändert.
+
 ## Produktionsbuild
 
 ```bash

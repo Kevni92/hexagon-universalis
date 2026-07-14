@@ -19,6 +19,19 @@ test('desktop and mobile viewport do not overflow horizontally', async ({ page }
   await expect(page.locator('canvas.viewport-canvas')).toBeVisible();
 });
 
+test('demo world is opt-in via query parameter and clearly labeled', async ({ page }) => {
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+
+  await page.goto('/');
+  await expect(page.getByTestId('app-status')).toHaveText('Three.js-Testszene bereit');
+
+  await page.goto('/?world=demo');
+  await expect(page.getByTestId('app-status')).toHaveText('Tile-Demo – keine reale Erde');
+  await expect(page.locator('canvas.viewport-canvas')).toHaveCount(1);
+  expect(pageErrors).toEqual([]);
+});
+
 test('globe canvas accepts pointer and wheel interaction', async ({ page }) => {
   await page.goto('/');
   const canvas = page.locator('canvas.viewport-canvas');

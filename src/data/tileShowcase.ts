@@ -1,5 +1,5 @@
 import type { GeodesicTopology } from '@/topology/geodesic';
-import { TILE_TYPES, type TileModifier, type TileType } from '@/data/tileCatalog';
+import { TILE_PROFILES, TILE_TYPES, type TileModifier, type TileType } from '@/data/tileCatalog';
 import { tileDetailProfile } from './tileShowcaseProfiles';
 
 export interface ShowcaseCell {
@@ -37,4 +37,8 @@ export function createTileShowcaseWorld(
     cells,
     counts,
   };
+}
+
+export function tileShowcaseCellColors(world: TileShowcaseWorld): ReadonlyMap<string, string> {
+  return new Map(world.cells.map((cell) => [cell.cellId, TILE_PROFILES[cell.tileType].color]));
 }

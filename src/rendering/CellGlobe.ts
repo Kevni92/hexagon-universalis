@@ -17,7 +17,7 @@ const CELL_GAP_FACTOR = 0.985;
 export function createCellGlobeGeometryData(
   topology: GeodesicTopology,
   radius = topology.radius,
-  terrainClasses?: ReadonlyMap<string, TerrainClass>,
+  cellColors?: ReadonlyMap<string, string>,
 ): CellGlobeGeometryData {
   if (!Number.isFinite(radius) || radius <= 0)
     throw new RangeError('radius muss größer als 0 sein.');
@@ -38,10 +38,8 @@ export function createCellGlobeGeometryData(
       for (const vertex of triangle) {
         positions.push(vertex.x * radius, vertex.y * radius, vertex.z * radius);
         normals.push(vertex.x, vertex.y, vertex.z);
-        if (terrainClasses !== undefined)
-          colors.push(
-            ...hexToRgb(terrainColor(terrainClasses.get(cell.id) ?? 'deepWater', cell.id)),
-          );
+        if (cellColors !== undefined)
+          colors.push(...hexToRgb(cellColors.get(cell.id) ?? '#173b68'));
       }
       cellIds.push(cell.id);
     }
@@ -50,16 +48,27 @@ export function createCellGlobeGeometryData(
   return { positions, normals, cellIds, colors, triangleCount: cellIds.length };
 }
 
+export function terrainClassesToCellColors(
+  terrainClasses: ReadonlyMap<string, TerrainClass>,
+): ReadonlyMap<string, string> {
+  return new Map(
+    [...terrainClasses].map(([cellId, terrainClass]) => [
+      cellId,
+      terrainColor(terrainClass, cellId),
+    ]),
+  );
+}
+
 export function createCellGlobeMesh(
   topology: GeodesicTopology,
   radius = topology.radius,
-  terrainClasses?: ReadonlyMap<string, TerrainClass>,
+  cellColors?: ReadonlyMap<string, string>,
 ): THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial> {
-  const data = createCellGlobeGeometryData(topology, radius, terrainClasses);
+  const data = createCellGlobeGeometryData(topology, radius, cellColors);
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(data.positions, 3));
   geometry.setAttribute('normal', new THREE.Float32BufferAttribute(data.normals, 3));
-  if (terrainClasses !== undefined)
+  if (cellColors !== undefined)
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(data.colors, 3));
   geometry.computeBoundingSphere();
 
@@ -69,7 +78,7 @@ export function createCellGlobeMesh(
     roughness: 0.72,
     metalness: 0.08,
     side: THREE.FrontSide,
-    vertexColors: terrainClasses !== undefined,
+    vertexColors: cellColors !== undefined,
   });
   const mesh = new THREE.Mesh(geometry, material);
   mesh.name = 'cell-globe';
