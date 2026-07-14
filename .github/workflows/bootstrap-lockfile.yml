@@ -1,0 +1,46 @@
+name: Bootstrap lockfile
+
+on:
+  push:
+    branches:
+      - chore/2-project-bootstrap
+
+permissions:
+  contents: write
+
+jobs:
+  generate-lockfile:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Lockfile erzeugen
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Abhängigkeiten installieren
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Qualitätsprüfungen ausführen
+        run: |
+          npm run format:check
+          npm run lint
+          npm run typecheck
+          npm run test:run
+          npm run build
+
+      - name: Lockfile committen
+        run: |
+          rm .github/workflows/bootstrap-lockfile.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json .github/workflows/bootstrap-lockfile.yml
+          git commit -m "chore: add reproducible npm lockfile"
+          git push
