@@ -38,8 +38,14 @@ npm run format:check
 npm run lint
 npm run typecheck
 npm run test:run
+npm run test:e2e
 npm run build
 ```
+
+Die Playwright-E2E-Tests starten den Produktionsserver und prüfen Canvas,
+Status, responsive Layout sowie grundlegende Pointer-/Wheel-Interaktion. Für
+den ersten lokalen Lauf ist einmalig `npx playwright install chromium`
+erforderlich.
 
 Für die lokale Entwicklung stehen zusätzlich `npm run format` und der Vitest-Watchmodus über `npm test` bereit.
 
@@ -74,6 +80,8 @@ Fehlerkorrektur über den Workflow-Button **Run workflow** erneut ausführen. Nu
 - `src/ui/` – DOM-basierte Benutzeroberfläche
 - `src/shared/` – allgemeine Hilfsfunktionen und Typen
 - `tests/` – automatisierte Tests
+- `e2e/` – Playwright-Tests gegen den Produktionsbuild
+- `docs/` – Architektur, Datenpipeline und bekannte Auflösungsgrenzen
 
 ## Mitarbeit
 
