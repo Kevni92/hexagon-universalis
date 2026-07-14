@@ -269,7 +269,9 @@ function classifyCell(
     (neighborId) => surfacesById.get(neighborId) !== cell.surface,
   );
   const coastalMoisture = cell.surface === 'land' && isCoast ? 0.08 : 0;
-  const temperature = round(clamp(cell.rawTemperature - Math.max(cell.elevation, 0) * 0.34, 0, 1));
+  const temperature = round(
+    clamp(cell.rawTemperature - Math.max(cell.elevation, 0) * 0.34, 0, 1),
+  );
   const moisture = round(clamp(cell.rawMoisture + coastalMoisture, 0, 1));
   const relief = classifyRelief(cell.elevation);
   const visual = classifyVisualTile(cell.surface, isCoast, cell.elevation, temperature, moisture);
@@ -304,7 +306,8 @@ function classifyVisualTile(
   readonly modifiers: readonly TileModifier[];
 } {
   if (surface === 'water') {
-    if (temperature < 0.13 && elevation > -0.32) return { tileType: 'iceWater', modifiers: [] };
+    if (temperature < 0.13 && elevation > -0.32)
+      return { tileType: 'iceWater', modifiers: [] };
     if (elevation <= -0.62) return { tileType: 'deepSea', modifiers: [] };
     if (elevation <= -0.22) return { tileType: 'ocean', modifiers: [] };
     if (elevation <= -0.07) return { tileType: 'shelfWater', modifiers: [] };
