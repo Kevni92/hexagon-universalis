@@ -2,11 +2,15 @@ import * as THREE from 'three';
 
 import { GlobeControls } from '@/input/GlobeControls';
 import { createGeodesicTopology } from '@/topology/geodesic';
+import { createTileShowcaseWorld, tileShowcaseCellColors } from '@/data/tileShowcase';
 
 import { createCellGlobeMesh } from './CellGlobe';
 
 const MAX_PIXEL_RATIO = 2;
 const CAMERA = { fov: 45, near: 0.1, far: 100, z: 3.4 } as const;
+const SHOWCASE_TOPOLOGY_FREQUENCY = 2;
+
+export type WorldMode = 'earth' | 'demo';
 
 export interface RendererErrorTarget {
   show(message: string): void;
@@ -25,7 +29,10 @@ export class SceneRenderer {
   private lastFrameTime = 0;
   private disposed = false;
 
-  public constructor(private readonly container: HTMLElement) {
+  public constructor(
+    private readonly container: HTMLElement,
+    worldMode: WorldMode = 'earth',
+  ) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -36,7 +43,10 @@ export class SceneRenderer {
     this.camera.position.set(0, 0, CAMERA.z);
     this.scene.add(this.createHemisphereLight(), this.createKeyLight(), this.world);
 
-    this.cellGlobe = createCellGlobeMesh(createGeodesicTopology());
+    this.cellGlobe =
+      worldMode === 'demo'
+        ? this.createShowcaseGlobe()
+        : createCellGlobeMesh(createGeodesicTopology());
     this.world.add(this.cellGlobe);
     this.controls = new GlobeControls(this.world, this.camera, this.renderer.domElement);
 
@@ -76,6 +86,15 @@ export class SceneRenderer {
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
+
+  private readonly createShowcaseGlobe = (): THREE.Mesh<
+    THREE.BufferGeometry,
+    THREE.MeshStandardMaterial
+  > => {
+    const topology = createGeodesicTopology(SHOWCASE_TOPOLOGY_FREQUENCY);
+    const showcase = createTileShowcaseWorld(topology);
+    return createCellGlobeMesh(topology, topology.radius, tileShowcaseCellColors(showcase));
+  };
 
   private readonly createHemisphereLight = (): THREE.HemisphereLight =>
     new THREE.HemisphereLight(0xbfdcff, 0x142033, 2.4);
