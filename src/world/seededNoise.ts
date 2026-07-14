@@ -50,14 +50,7 @@ export function createSeededNoise3D(seed: string): SeededNoise3D {
 
   return {
     sample,
-    fbm(
-      x: number,
-      y: number,
-      z: number,
-      octaves = 5,
-      lacunarity = 2,
-      gain = 0.5,
-    ): number {
+    fbm(x: number, y: number, z: number, octaves = 5, lacunarity = 2, gain = 0.5): number {
       assertFiniteCoordinates(x, y, z);
       if (!Number.isInteger(octaves) || octaves < 1 || octaves > 12)
         throw new RangeError('Noise-Oktaven müssen eine ganze Zahl zwischen 1 und 12 sein.');
