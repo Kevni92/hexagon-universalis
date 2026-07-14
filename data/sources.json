@@ -1,0 +1,63 @@
+{
+  "manifestVersion": 1,
+  "outputFormatVersion": 1,
+  "coordinateReferenceSystem": "EPSG:4326",
+  "sources": [
+    {
+      "id": "natural-earth-land-10m",
+      "name": "Natural Earth Admin 0 – Countries and coastline",
+      "publisher": "Natural Earth",
+      "version": "5.1.2",
+      "downloadUrl": "https://www.naturalearthdata.com/downloads/10m-cultural-vectors/",
+      "license": "Public domain",
+      "attribution": "Natural Earth",
+      "expectedFiles": ["ne_10m_admin_0_countries.zip"],
+      "sha256": null,
+      "processing": ["unzip", "reproject EPSG:4326", "rasterize or sample against cell polygons"]
+    },
+    {
+      "id": "gebco-global-relief",
+      "name": "GEBCO global elevation model",
+      "publisher": "GEBCO Compilation Group",
+      "version": "2024",
+      "downloadUrl": "https://www.gebco.net/data_and_products/gridded_bathymetry_data/",
+      "license": "GEBCO Grid Terms of Use",
+      "attribution": "GEBCO Compilation Group (2024)",
+      "expectedFiles": ["GEBCO_2024.nc"],
+      "sha256": null,
+      "processing": [
+        "read NetCDF",
+        "handle NoData and antimeridian",
+        "aggregate elevation in meters"
+      ]
+    },
+    {
+      "id": "esa-worldcover",
+      "name": "ESA WorldCover global land cover",
+      "publisher": "European Space Agency",
+      "version": "2021",
+      "downloadUrl": "https://worldcover2021.esa.int/",
+      "license": "ESA WorldCover product license",
+      "attribution": "ESA WorldCover project",
+      "expectedFiles": ["ESA_WorldCover_10m_2021_v200_cog.tif"],
+      "sha256": null,
+      "processing": ["read GeoTIFF", "reproject EPSG:4326", "aggregate majority class"]
+    },
+    {
+      "id": "hydrorivers",
+      "name": "HydroRIVERS global river network",
+      "publisher": "World Wildlife Fund and McGill University",
+      "version": "1.0",
+      "downloadUrl": "https://www.hydrosheds.org/products/hydrorivers",
+      "license": "HydroSHEDS license",
+      "attribution": "HydroSHEDS database",
+      "expectedFiles": ["HydroRIVERS_v10.gpkg"],
+      "sha256": null,
+      "processing": [
+        "read vector lines",
+        "reproject EPSG:4326",
+        "intersect or measure distance to cells"
+      ]
+    }
+  ]
+}
