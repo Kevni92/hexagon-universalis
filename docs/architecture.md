@@ -33,3 +33,8 @@ npm run build
 Die räumliche Auflösung begrenzt die Darstellung schmaler Küsten, Inseln und
 Flüsse. Das ist eine dokumentierte Aggregationsgrenze, keine alternative oder
 zufällige Geographie.
+
+Architekturentscheidungen mit dauerhafter Tragweite werden als ADRs unter
+`docs/architecture/` festgehalten, beginnend mit
+[0001-hierarchical-geodesic-lod.md](./architecture/0001-hierarchical-geodesic-lod.md)
+zur mehrstufigen geodätischen Auflösungsarchitektur.
