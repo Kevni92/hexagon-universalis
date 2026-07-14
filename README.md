@@ -43,6 +43,20 @@ npm run preview
 
 Der Build erzeugt ausschließlich statische Dateien im Verzeichnis `dist/`. Das Projekt besitzt weder Serverimplementierung noch Backend-Laufzeitabhängigkeit.
 
+## Erd-Datenpyramide
+
+Die versionierten, gzip-komprimierten Multi-LOD-Artefakte werden offline
+erzeugt und geprüft:
+
+```bash
+npm run data:build
+npm run data:verify
+```
+
+Format, Quellenbezug, Reproduzierbarkeit, Budgets und Debugkarten sind in
+[docs/earth-tile-pyramid.md](./docs/earth-tile-pyramid.md) dokumentiert. Die
+Anwendung verarbeitet keine GIS-Rohdaten im Browser.
+
 ## Tests und Qualitätsprüfungen
 
 ```bash

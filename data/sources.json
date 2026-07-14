@@ -2,6 +2,16 @@
   "manifestVersion": 1,
   "outputFormatVersion": 1,
   "coordinateReferenceSystem": "EPSG:4326",
+  "tilePyramid": {
+    "formatVersion": 1,
+    "datasetVersion": "2026.07-reference-v1",
+    "input": "data/pyramid/reference-input.json",
+    "inputSha256": "f8f8dcd04c6c76d491db04e615543a4dbaa0e8ee6b45d1715d1d34c20f7205da",
+    "output": "public/data/earth/v1",
+    "levels": ["global", "regional", "local"],
+    "encoding": "json+gzip",
+    "deterministicOrdering": "UTF-16 code-unit order by canonical cell and chunk ID"
+  },
   "sources": [
     {
       "id": "natural-earth-land-10m",

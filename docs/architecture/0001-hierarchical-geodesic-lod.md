@@ -307,11 +307,12 @@ hier als Entwurf festgehalten und in Folge-Issues konkretisiert:
    `src/topology/lod/hierarchy.ts`) plus Patch-/Chunk-Erzeugung je
    Elternzelle implementiert und gegen Datumsgrenze/Pole getestet
    (`tests/lod-hierarchy.test.ts`).
-3. **Phase 3 (weiterhin Folge-Issue, nicht Teil von #58):** Chunk-
-   Serialisierung für die Offline-Datenpipeline (`data/`) inklusive
-   `data/sources.json`-Erweiterung um Level-/Chunk-Metadaten. #58 hält Chunks
-   ausschließlich zur Laufzeit im Speicher (`WorldLodController`), lädt sie
-   aber nicht von einer statischen Datenquelle.
+3. **Phase 3 (#59, abgeschlossen):** Deterministische Chunk-Serialisierung
+   für die Offline-Datenpipeline inklusive Quellen-/Topologie-Fingerprint,
+   hierarchiequalifizierten Artefaktpfaden, gzip, SHA-256, Bootstrap-Manifest
+   und Größenbericht. `WorldLodController` aus #58 hält Chunks weiterhin
+   ausschließlich zur Laufzeit im Speicher; das Laden der statischen
+   Datenquelle bleibt Aufgabe von #60.
 4. **Phase 4 (#58, abgeschlossen):** `SceneRenderer` auf selektives
    Laden/Entladen von Chunks nach Kameraabstand umgestellt
    (`src/rendering/ChunkRenderer.ts`, neuer `WorldMode: 'lod'`); bestehende

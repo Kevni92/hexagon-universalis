@@ -16,7 +16,9 @@
     "format:check": "prettier --check .",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "data:build": "node scripts/data/tile-pyramid.mjs",
+    "data:verify": "node scripts/data/verify-tile-pyramid.mjs"
   },
   "dependencies": {
     "three": "^0.163.0"
