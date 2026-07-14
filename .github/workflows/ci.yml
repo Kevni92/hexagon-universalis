@@ -43,7 +43,9 @@ jobs:
         run: npm run typecheck
 
       - name: Test
-        run: npm run test:run 2>&1 | tee vitest.log
+        run: |
+          set -o pipefail
+          npm run test:run 2>&1 | tee vitest.log
 
       - name: Upload Vitest log
         if: failure()
