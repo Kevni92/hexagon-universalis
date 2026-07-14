@@ -69,7 +69,10 @@ npm run build
 ```
 
 Die Playwright-E2E-Tests starten den Produktionsserver und prüfen Canvas,
-Status, responsive Layout sowie grundlegende Pointer-/Wheel-Interaktion. Für
+versionierte Erdartefakte, Referenzregionen, LOD-/Ressourcenbudgets,
+Chunk-Fehlerfallback, Nordausrichtung, responsive Layouts sowie Pointer-/Wheel-Interaktion. Die
+vollständige Testmatrix und ihre dokumentierten Datenlimits stehen in
+[docs/multilod-earth-acceptance.md](./docs/multilod-earth-acceptance.md). Für
 den ersten lokalen Lauf ist einmalig `npx playwright install chromium`
 erforderlich.
 

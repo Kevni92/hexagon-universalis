@@ -22,6 +22,20 @@ export interface RendererErrorTarget {
   show(message: string): void;
 }
 
+export interface SceneDiagnostics {
+  readonly worldMode: WorldMode;
+  readonly activeChunkCount: number;
+  readonly activeCellCount: number;
+  readonly cameraDistance: number;
+  readonly orientation: import('@/input/GlobeControls').GlobeOrientation;
+  readonly dataStatus: EarthRuntimeStatus | null;
+  readonly resources: {
+    readonly geometries: number;
+    readonly textures: number;
+    readonly drawCalls: number;
+  };
+}
+
 export class SceneRenderer {
   public readonly scene = new THREE.Scene();
   public readonly camera = new THREE.PerspectiveCamera(CAMERA.fov, 1, CAMERA.near, CAMERA.far);
@@ -44,7 +58,7 @@ export class SceneRenderer {
 
   public constructor(
     private readonly container: HTMLElement,
-    worldMode: WorldMode = 'earth',
+    private readonly worldMode: WorldMode = 'earth',
     lodQualityProfile: QualityProfile = DESKTOP_QUALITY_PROFILE,
     onEarthStatus?: (status: EarthRuntimeStatus) => void,
   ) {
@@ -99,6 +113,27 @@ export class SceneRenderer {
   /** Gesamtzahl aktuell materialisierter Zellen im LOD-Modus. */
   public get activeCellCount(): number {
     return this.chunkRenderer?.activeCellCount ?? 0;
+  }
+
+  public get diagnostics(): SceneDiagnostics {
+    const info = (
+      this.renderer as unknown as {
+        info?: { memory?: { geometries?: number; textures?: number }; render?: { calls?: number } };
+      }
+    ).info;
+    return {
+      worldMode: this.worldMode,
+      activeChunkCount: this.activeChunkCount,
+      activeCellCount: this.activeCellCount,
+      cameraDistance: this.camera.position.length(),
+      orientation: this.controls.orientation,
+      dataStatus: this.earthRuntime?.status ?? null,
+      resources: {
+        geometries: info?.memory?.geometries ?? this.activeChunkCount,
+        textures: info?.memory?.textures ?? 0,
+        drawCalls: info?.render?.calls ?? this.activeChunkCount,
+      },
+    };
   }
 
   public start(): void {

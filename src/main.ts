@@ -10,6 +10,17 @@ if (root === null) {
 const app = createApp(root);
 app.start();
 
+declare global {
+  interface Window {
+    __hexagonUniversalis?: typeof app;
+  }
+}
+
+window.__hexagonUniversalis = app;
+
 if (import.meta.hot) {
-  import.meta.hot.dispose(() => app.dispose());
+  import.meta.hot.dispose(() => {
+    app.dispose();
+    delete window.__hexagonUniversalis;
+  });
 }
