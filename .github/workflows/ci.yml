@@ -43,7 +43,15 @@ jobs:
         run: npm run typecheck
 
       - name: Test
-        run: npm run test:run
+        run: npm run test:run 2>&1 | tee vitest.log
+
+      - name: Upload Vitest log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitest-log
+          path: vitest.log
+          if-no-files-found: error
 
       - name: Build
         run: npm run build
