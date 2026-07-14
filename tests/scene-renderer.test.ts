@@ -22,6 +22,7 @@ vi.mock('three', () => {
 
   class Mesh extends Object3D {
     public name = '';
+    public userData: Record<string, unknown> = {};
     public constructor(
       public readonly geometry: { dispose: () => void },
       public readonly material: { dispose: () => void },
@@ -70,6 +71,25 @@ vi.mock('three', () => {
     });
   }
 
+  class BufferGeometry {
+    public readonly attributes: Record<string, unknown> = {};
+    public setAttribute = vi.fn((name: string, attribute: unknown) => {
+      this.attributes[name] = attribute;
+      return this;
+    });
+    public computeBoundingSphere = vi.fn();
+    public dispose = vi.fn(() => {
+      testState.geometryDisposed = true;
+    });
+  }
+
+  class Float32BufferAttribute {
+    public constructor(
+      public readonly array: readonly number[],
+      public readonly itemSize: number,
+    ) {}
+  }
+
   class Material {
     public dispose = vi.fn(() => {
       testState.materialDisposed = true;
@@ -86,7 +106,10 @@ vi.mock('three', () => {
 
   return {
     Color,
+    BufferGeometry,
     DirectionalLight,
+    Float32BufferAttribute,
+    FrontSide: 0,
     Group,
     HemisphereLight,
     IcosahedronGeometry,

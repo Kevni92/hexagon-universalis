@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 
 import { GlobeControls } from '@/input/GlobeControls';
+import { createGeodesicTopology } from '@/topology/geodesic';
+
+import { createCellGlobeMesh } from './CellGlobe';
 
 const MAX_PIXEL_RATIO = 2;
 const CAMERA = { fov: 45, near: 0.1, far: 100, z: 3.4 } as const;
@@ -16,7 +19,7 @@ export class SceneRenderer {
 
   private readonly renderer: THREE.WebGLRenderer;
   private readonly controls: GlobeControls;
-  private readonly testBody: THREE.Mesh;
+  private readonly cellGlobe: THREE.Mesh;
   private readonly resizeObserver: ResizeObserver | null;
   private animationFrameId: number | null = null;
   private lastFrameTime = 0;
@@ -33,16 +36,8 @@ export class SceneRenderer {
     this.camera.position.set(0, 0, CAMERA.z);
     this.scene.add(this.createHemisphereLight(), this.createKeyLight(), this.world);
 
-    const geometry = new THREE.IcosahedronGeometry(1, 2);
-    const material = new THREE.MeshStandardMaterial({
-      color: 0x4f8cff,
-      flatShading: true,
-      roughness: 0.72,
-      metalness: 0.08,
-    });
-    this.testBody = new THREE.Mesh(geometry, material);
-    this.testBody.name = 'temporary-test-body';
-    this.world.add(this.testBody);
+    this.cellGlobe = createCellGlobeMesh(createGeodesicTopology());
+    this.world.add(this.cellGlobe);
     this.controls = new GlobeControls(this.world, this.camera, this.renderer.domElement);
 
     if (typeof ResizeObserver !== 'undefined') {
@@ -96,8 +91,6 @@ export class SceneRenderer {
     const deltaSeconds = Math.min((time - this.lastFrameTime) / 1000, 0.1);
     this.lastFrameTime = time;
     this.controls.update(deltaSeconds);
-    this.testBody.rotation.y += deltaSeconds * 0.28;
-    this.testBody.rotation.x += deltaSeconds * 0.08;
     this.renderer.render(this.scene, this.camera);
     this.animationFrameId = requestAnimationFrame(this.renderFrame);
   };
