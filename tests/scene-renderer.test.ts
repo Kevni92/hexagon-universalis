@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('three', () => {
   class Quaternion {
@@ -221,12 +221,17 @@ describe('SceneRenderer', () => {
         public trigger = (): void => this.callback();
       },
     );
-    vi.stubGlobal('performance', { now: vi.fn(() => 100) });
+    vi.spyOn(globalThis.performance, 'now').mockReturnValue(100);
     vi.stubGlobal(
       'requestAnimationFrame',
       vi.fn(() => 1),
     );
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('initializes one renderer and camera, and resizes to the container', async () => {
@@ -236,7 +241,7 @@ describe('SceneRenderer', () => {
       clientHeight: 600,
       append: vi.fn(),
     } as unknown as HTMLElement;
-    const renderer = new SceneRenderer(container);
+    const renderer = new SceneRenderer(container, 'lod');
 
     expect(testState.rendererCount).toBe(1);
     expect(testState.observerObserved).toBe(true);
@@ -252,7 +257,7 @@ describe('SceneRenderer', () => {
       clientHeight: 600,
       append: vi.fn(),
     } as unknown as HTMLElement;
-    const renderer = new SceneRenderer(container);
+    const renderer = new SceneRenderer(container, 'lod');
 
     renderer.start();
     renderer.start();
@@ -274,7 +279,7 @@ describe('SceneRenderer', () => {
       clientHeight: 0,
       append: vi.fn(),
     } as unknown as HTMLElement;
-    const renderer = new SceneRenderer(container);
+    const renderer = new SceneRenderer(container, 'lod');
 
     expect(renderer.camera.aspect).toBe(1);
     expect(testState.size).toEqual([0, 0]);
