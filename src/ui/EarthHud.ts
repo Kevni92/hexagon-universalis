@@ -1,6 +1,7 @@
 import type { EarthCellData } from '@/data/earthModel';
 import type { TerrainClass } from '@/data/terrain';
 import { TERRAIN_PALETTE } from '@/data/terrain';
+import type { PoliticalCell, PoliticalPolity } from '@/data/political1815';
 
 export interface CellInfoViewModel {
   readonly title: string;
@@ -75,6 +76,23 @@ export function sourceViewModel(
     formatVersion: `Format v${formatVersion}`,
     sources: sources.map(({ name, version, attribution }) => ({ name, version, attribution })),
   };
+}
+
+export function politicalInfoViewModel(
+  cell: PoliticalCell | null,
+  polity: PoliticalPolity | null,
+): readonly { label: string; value: string }[] {
+  if (cell === null || polity === null) return [];
+  return [
+    { label: 'Historische Einheit', value: polity.displayName },
+    { label: 'Einheitstyp', value: polity.type },
+    { label: 'Referenzdatum', value: '1815-06-09' },
+    {
+      label: 'Flächenanteil',
+      value: `${Math.round((cell.overlaps.find((overlap) => overlap.polityId === polity.polityId)?.fraction ?? 0) * 100)} %`,
+    },
+    { label: 'Qualität', value: cell.qualityFlag },
+  ];
 }
 
 function formatMeters(value: number): string {
