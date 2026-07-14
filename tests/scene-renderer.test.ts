@@ -20,6 +20,12 @@ vi.mock('three', () => {
     public setFromEuler(): this {
       return this;
     }
+    public setFromAxisAngle(): this {
+      return this;
+    }
+    public multiplyQuaternions(): this {
+      return this;
+    }
   }
 
   class Vector3 {
@@ -167,7 +173,10 @@ vi.mock('three', () => {
     Group,
     HemisphereLight,
     IcosahedronGeometry,
-    MathUtils: { degToRad: (degrees: number) => (degrees * Math.PI) / 180 },
+    MathUtils: {
+      degToRad: (degrees: number) => (degrees * Math.PI) / 180,
+      radToDeg: (radians: number) => (radians * 180) / Math.PI,
+    },
     Mesh,
     MeshStandardMaterial: Material,
     PerspectiveCamera,

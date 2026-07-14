@@ -80,7 +80,7 @@ describe('GlobeControls', () => {
   });
 
   it('clamps wheel and pinch zoom to both distance limits', () => {
-    const { camera, controls, element } = createControls();
+    const { camera, controls, element } = createControls({ minDistance: 2.2, maxDistance: 8 });
     const preventDefault = vi.fn();
 
     element.dispatch('wheel', { deltaY: -1_000_000, deltaMode: 0, preventDefault });
@@ -133,6 +133,75 @@ describe('GlobeControls', () => {
     const third = world.rotation.y;
 
     expect(second - first).toBeGreaterThan(third - second);
+    controls.dispose();
+  });
+
+  it('keeps geographic north upright through circular drags and clamps both poles', () => {
+    const { controls, element, world } = createControls({ inertia: false, maxLatitudeDegrees: 80 });
+    element.dispatch('pointerdown', {
+      pointerId: 1,
+      pointerType: 'mouse',
+      button: 0,
+      clientX: 0,
+      clientY: 0,
+    });
+    for (const [x, y] of [
+      [100, 0],
+      [100, 100],
+      [0, 100],
+      [0, 0],
+      [0, 10_000],
+    ] as const)
+      element.dispatch('pointermove', { pointerId: 1, clientX: x, clientY: y });
+
+    expect(Math.abs(controls.orientation.latitudeDegrees)).toBeLessThanOrEqual(80);
+    expect(controls.orientation.rollDegrees).toBe(0);
+    expect(Number.isFinite(world.quaternion.length())).toBe(true);
+    expect(world.quaternion.length()).toBeCloseTo(1);
+    controls.dispose();
+  });
+
+  it('derives a larger initial globe and zoom bounds from radius, relief, and camera FOV', () => {
+    const { camera, controls, element } = createControls({
+      inertia: false,
+      sphereRadius: 2,
+      reliefReserve: 0.2,
+    });
+    const initial = camera.position.length();
+    expect(initial).toBeGreaterThan(2.2);
+    expect(initial).toBeLessThan(8);
+    element.dispatch('wheel', { deltaY: -1_000_000, deltaMode: 0, preventDefault: vi.fn() });
+    expect(camera.position.length()).toBeCloseTo(2.36);
+    element.dispatch('wheel', { deltaY: 1_000_000, deltaMode: 0, preventDefault: vi.fn() });
+    expect(camera.position.length()).toBe(16);
+    controls.dispose();
+  });
+
+  it('starts north alignment after release and cancels it on renewed interaction', () => {
+    const { camera, controls, element } = createControls({ inertia: false });
+    element.dispatch('pointerdown', {
+      pointerId: 1,
+      pointerType: 'mouse',
+      button: 0,
+      clientX: 0,
+      clientY: 0,
+    });
+    element.dispatch('pointermove', { pointerId: 1, clientX: 20, clientY: 10 });
+    element.dispatch('pointerup', { pointerId: 1 });
+    expect(controls.isNorthAligning).toBe(true);
+    const orientation = controls.orientation;
+    const distanceBefore = camera.position.length();
+    controls.update(0.016);
+    expect(controls.orientation).toEqual(orientation);
+    expect(camera.position.length()).toBe(distanceBefore);
+    element.dispatch('pointerdown', {
+      pointerId: 2,
+      pointerType: 'mouse',
+      button: 0,
+      clientX: 0,
+      clientY: 0,
+    });
+    expect(controls.isNorthAligning).toBe(false);
     controls.dispose();
   });
 });
