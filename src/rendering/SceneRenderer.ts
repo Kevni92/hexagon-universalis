@@ -5,6 +5,8 @@ import { createGeodesicTopology } from '@/topology/geodesic';
 import { createTileShowcaseWorld, tileShowcaseCellColors } from '@/data/tileShowcase';
 import { WorldLodController } from '@/topology/lod/WorldLod';
 import { DESKTOP_QUALITY_PROFILE, type QualityProfile } from '@/topology/lod/profiles';
+import { EarthChunkRuntime, type EarthRuntimeStatus } from '@/data/EarthChunkRuntime';
+import { EarthWorldModel } from '@/data/EarthWorldModel';
 
 import { createCellGlobeMesh } from './CellGlobe';
 import { ChunkRenderer } from './ChunkRenderer';
@@ -31,6 +33,11 @@ export class SceneRenderer {
   private readonly chunkRenderer: ChunkRenderer | null;
   private readonly worldLod: WorldLodController | null;
   private readonly resizeObserver: ResizeObserver | null;
+  private readonly earthRuntime: EarthChunkRuntime | null;
+  private readonly earthModel = new EarthWorldModel();
+  private visibleUnits: readonly import('@/topology/lod/WorldLod').VisibleUnit[] = [];
+  private requestedDataKey = '';
+  public readonly ready: Promise<void>;
   private animationFrameId: number | null = null;
   private lastFrameTime = 0;
   private disposed = false;
@@ -39,6 +46,7 @@ export class SceneRenderer {
     private readonly container: HTMLElement,
     worldMode: WorldMode = 'earth',
     lodQualityProfile: QualityProfile = DESKTOP_QUALITY_PROFILE,
+    onEarthStatus?: (status: EarthRuntimeStatus) => void,
   ) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO));
@@ -50,11 +58,12 @@ export class SceneRenderer {
     this.camera.position.set(0, 0, CAMERA.z);
     this.scene.add(this.createHemisphereLight(), this.createKeyLight(), this.world);
 
-    if (worldMode === 'lod') {
+    if (worldMode === 'lod' || worldMode === 'earth') {
       this.cellGlobe = null;
       this.worldLod = new WorldLodController(lodQualityProfile);
       this.chunkRenderer = new ChunkRenderer();
       this.world.add(this.chunkRenderer.group);
+      this.earthRuntime = worldMode === 'earth' ? new EarthChunkRuntime() : null;
     } else {
       this.worldLod = null;
       this.chunkRenderer = null;
@@ -63,6 +72,7 @@ export class SceneRenderer {
           ? this.createShowcaseGlobe()
           : createCellGlobeMesh(createGeodesicTopology());
       this.world.add(this.cellGlobe);
+      this.earthRuntime = null;
     }
     this.controls = new GlobeControls(this.world, this.camera, this.renderer.domElement);
 
@@ -75,6 +85,10 @@ export class SceneRenderer {
     }
     this.resize();
     if (this.worldLod !== null && this.chunkRenderer !== null) this.updateLod();
+    if (this.earthRuntime !== null) {
+      if (onEarthStatus !== undefined) this.earthRuntime.subscribe(onEarthStatus);
+      this.ready = this.initializeEarth().catch(() => undefined);
+    } else this.ready = Promise.resolve();
   }
 
   /** Anzahl aktiver Draw Calls (Chunks) im LOD-Modus; 0 in den übrigen Modi. */
@@ -106,6 +120,7 @@ export class SceneRenderer {
     // ChunkRenderer verwaltet seine Meshes selbst (differenzieller Cache); explizit disposen,
     // bevor der generische world.traverse-Sweep unten läuft, damit keine Listener/Caches übrig bleiben.
     this.chunkRenderer?.dispose();
+    this.earthRuntime?.dispose();
 
     this.world.traverse((object) => {
       if (!(object instanceof THREE.Mesh)) return;
@@ -175,7 +190,55 @@ export class SceneRenderer {
       sphereRadius: 1,
     });
 
-    const units = this.worldLod.update(cameraState);
-    this.chunkRenderer.update(units);
+    this.visibleUnits = this.worldLod.update(cameraState);
+    this.chunkRenderer.update(this.visibleUnits);
+    this.requestVisibleEarthData();
+  }
+
+  private async initializeEarth(): Promise<void> {
+    if (this.earthRuntime === null || this.chunkRenderer === null) return;
+    const bootstrap = await this.earthRuntime.loadBootstrap();
+    if (this.disposed) return;
+    this.earthModel.applyChunk(bootstrap);
+    this.chunkRenderer.setCellColors(this.earthModel.cellColors(), this.visibleUnits);
+    this.requestVisibleEarthData();
+  }
+
+  private requestVisibleEarthData(): void {
+    const manifest = this.earthRuntime?.manifest;
+    if (manifest === null || manifest === undefined || this.chunkRenderer === null) return;
+    const requested = new Set<string>();
+    for (const unit of this.visibleUnits) {
+      if (unit.level === 0) continue;
+      const parentIndices = new Set(
+        unit.cells
+          .map((cell) => cell.id.parentIndex)
+          .filter((index): index is number => index !== null),
+      );
+      for (const entry of manifest.chunks) {
+        if (unit.level === 1 && entry.level === 'regional') {
+          if ([...parentIndices].some((index) => entry.chunkId.endsWith(`__c${index}`)))
+            requested.add(entry.chunkId);
+        }
+        // Das veroeffentlichte v1-Schema qualifiziert lokale Eltern noch nicht vollstaendig
+        // (#67). Bis zur Schemamigration werden alle eindeutigen c<index>-Treffer geladen.
+        if (unit.level === 2 && entry.level === 'local') {
+          if ([...parentIndices].some((index) => entry.chunkId.endsWith(`__c${index}`)))
+            requested.add(entry.chunkId);
+        }
+      }
+    }
+    const ids = [...requested].sort();
+    const key = ids.join('|');
+    if (key === this.requestedDataKey) return;
+    this.requestedDataKey = key;
+    void this.earthRuntime
+      ?.requireChunks(ids)
+      .then((chunks) => {
+        if (this.disposed || chunks.length === 0 || this.chunkRenderer === null) return;
+        for (const chunk of chunks) this.earthModel.applyChunk(chunk);
+        this.chunkRenderer.setCellColors(this.earthModel.cellColors(), this.visibleUnits);
+      })
+      .catch(() => undefined);
   }
 }

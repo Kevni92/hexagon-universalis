@@ -38,7 +38,7 @@ describe('createApp', () => {
     createApp(root, '');
 
     const status = root.querySelector('#status');
-    expect(status?.textContent).toBe('Three.js-Testszene bereit');
+    expect(status?.textContent).toBe('Versionierte Erddaten werden geladen ...');
     expect((SceneRenderer as unknown as { instances: { worldMode: string }[] }).instances).toEqual([
       { worldMode: 'earth' },
     ]);
