@@ -23,7 +23,7 @@ export class ChunkRenderer {
 
   public constructor(
     private readonly radius = 1,
-    private readonly cellColors?: ReadonlyMap<string, string>,
+    private cellColors?: ReadonlyMap<string, string>,
   ) {
     this.group.name = 'chunk-renderer';
   }
@@ -77,6 +77,15 @@ export class ChunkRenderer {
       this.meshesByKey.set(unit.key, mesh);
       this.group.add(mesh);
     }
+  }
+
+  /** Aktualisiert reale Zellfarben und baut nur die aktuell sichtbaren Chunks neu. */
+  public setCellColors(colors: ReadonlyMap<string, string>, units: readonly VisibleUnit[]): void {
+    if (this.disposed) return;
+    this.cellColors = colors;
+    for (const mesh of this.meshesByKey.values()) this.disposeMesh(mesh);
+    this.meshesByKey.clear();
+    this.update(units);
   }
 
   public dispose(): void {

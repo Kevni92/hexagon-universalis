@@ -6,7 +6,7 @@ export interface App {
 }
 
 const DEMO_STATUS = 'Tile-Demo – keine reale Erde';
-const EARTH_STATUS = 'Three.js-Testszene bereit';
+const EARTH_STATUS = 'Versionierte Erddaten werden geladen ...';
 const LOD_STATUS = 'Multi-LOD-Testszene bereit';
 
 const WORLD_MODES: readonly WorldMode[] = ['earth', 'demo', 'lod'];
@@ -45,7 +45,12 @@ export function createApp(root: HTMLElement, locationSearch = window.location.se
   let renderer: SceneRenderer | null = null;
 
   try {
-    renderer = new SceneRenderer(viewport, worldMode);
+    renderer = new SceneRenderer(viewport, worldMode, undefined, (earthStatus) => {
+      const status = root.querySelector<HTMLElement>('#status');
+      if (status === null) return;
+      status.textContent = earthStatus.message;
+      status.classList.toggle('status-error', earthStatus.phase === 'error');
+    });
   } catch (error) {
     const status = root.querySelector<HTMLElement>('#status');
     if (status !== null) {

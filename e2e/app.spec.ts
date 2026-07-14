@@ -24,7 +24,9 @@ test('demo world is opt-in via query parameter and clearly labeled', async ({ pa
   page.on('pageerror', (error) => pageErrors.push(error));
 
   await page.goto('/');
-  await expect(page.getByTestId('app-status')).toHaveText('Three.js-Testszene bereit');
+  await expect(page.getByTestId('app-status')).toContainText(
+    'Erdaten 2026.07-reference-v1 sind bereit',
+  );
 
   await page.goto('/?world=demo');
   await expect(page.getByTestId('app-status')).toHaveText('Tile-Demo – keine reale Erde');
