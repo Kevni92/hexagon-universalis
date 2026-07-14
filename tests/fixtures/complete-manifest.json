@@ -1,0 +1,19 @@
+{
+  "manifestVersion": 1,
+  "outputFormatVersion": 1,
+  "coordinateReferenceSystem": "EPSG:4326",
+  "sources": [
+    {
+      "id": "fixture",
+      "name": "Fixture dataset",
+      "publisher": "Tests",
+      "version": "1",
+      "downloadUrl": "https://example.invalid/fixture",
+      "license": "Test license",
+      "attribution": "Test attribution",
+      "expectedFiles": ["fixture.bin"],
+      "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "processing": ["validate", "aggregate"]
+    }
+  ]
+}
