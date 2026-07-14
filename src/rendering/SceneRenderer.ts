@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 
+import { GlobeControls } from '@/input/GlobeControls';
+
 const MAX_PIXEL_RATIO = 2;
 const CAMERA = { fov: 45, near: 0.1, far: 100, z: 3.4 } as const;
 
@@ -13,6 +15,7 @@ export class SceneRenderer {
   public readonly world = new THREE.Group();
 
   private readonly renderer: THREE.WebGLRenderer;
+  private readonly controls: GlobeControls;
   private readonly testBody: THREE.Mesh;
   private readonly resizeObserver: ResizeObserver | null;
   private animationFrameId: number | null = null;
@@ -40,6 +43,7 @@ export class SceneRenderer {
     this.testBody = new THREE.Mesh(geometry, material);
     this.testBody.name = 'temporary-test-body';
     this.world.add(this.testBody);
+    this.controls = new GlobeControls(this.world, this.camera, this.renderer.domElement);
 
     if (typeof ResizeObserver !== 'undefined') {
       this.resizeObserver = new ResizeObserver(this.resize);
@@ -64,6 +68,7 @@ export class SceneRenderer {
     if (this.animationFrameId !== null) cancelAnimationFrame(this.animationFrameId);
     this.animationFrameId = null;
     this.resizeObserver?.disconnect();
+    this.controls.dispose();
     if (this.resizeObserver === null) window.removeEventListener('resize', this.resize);
 
     this.world.traverse((object) => {
@@ -90,6 +95,7 @@ export class SceneRenderer {
     if (this.disposed) return;
     const deltaSeconds = Math.min((time - this.lastFrameTime) / 1000, 0.1);
     this.lastFrameTime = time;
+    this.controls.update(deltaSeconds);
     this.testBody.rotation.y += deltaSeconds * 0.28;
     this.testBody.rotation.x += deltaSeconds * 0.08;
     this.renderer.render(this.scene, this.camera);

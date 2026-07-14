@@ -37,10 +37,17 @@ vi.mock('three', () => {
       this.aspect = args[1] ?? 1;
     }
     public updateProjectionMatrix = vi.fn();
+    public lookAt = vi.fn();
   }
 
   class WebGLRenderer {
-    public readonly domElement = { className: '', remove: vi.fn() };
+    public readonly domElement = {
+      addEventListener: vi.fn(),
+      className: '',
+      remove: vi.fn(),
+      removeEventListener: vi.fn(),
+      style: {},
+    };
     public outputColorSpace = '';
     public constructor() {
       testState.rendererCount += 1;
