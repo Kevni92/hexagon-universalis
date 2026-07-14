@@ -3,14 +3,18 @@ import * as THREE from 'three';
 import { GlobeControls } from '@/input/GlobeControls';
 import { createGeodesicTopology } from '@/topology/geodesic';
 import { createTileShowcaseWorld, tileShowcaseCellColors } from '@/data/tileShowcase';
+import { WorldLodController } from '@/topology/lod/WorldLod';
+import { DESKTOP_QUALITY_PROFILE, type QualityProfile } from '@/topology/lod/profiles';
 
 import { createCellGlobeMesh } from './CellGlobe';
+import { ChunkRenderer } from './ChunkRenderer';
+import { computeLocalCameraState } from './CameraFrame';
 
 const MAX_PIXEL_RATIO = 2;
 const CAMERA = { fov: 45, near: 0.1, far: 100, z: 3.4 } as const;
 const SHOWCASE_TOPOLOGY_FREQUENCY = 2;
 
-export type WorldMode = 'earth' | 'demo';
+export type WorldMode = 'earth' | 'demo' | 'lod';
 
 export interface RendererErrorTarget {
   show(message: string): void;
@@ -23,7 +27,9 @@ export class SceneRenderer {
 
   private readonly renderer: THREE.WebGLRenderer;
   private readonly controls: GlobeControls;
-  private readonly cellGlobe: THREE.Mesh;
+  private readonly cellGlobe: THREE.Mesh | null;
+  private readonly chunkRenderer: ChunkRenderer | null;
+  private readonly worldLod: WorldLodController | null;
   private readonly resizeObserver: ResizeObserver | null;
   private animationFrameId: number | null = null;
   private lastFrameTime = 0;
@@ -32,6 +38,7 @@ export class SceneRenderer {
   public constructor(
     private readonly container: HTMLElement,
     worldMode: WorldMode = 'earth',
+    lodQualityProfile: QualityProfile = DESKTOP_QUALITY_PROFILE,
   ) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO));
@@ -43,11 +50,20 @@ export class SceneRenderer {
     this.camera.position.set(0, 0, CAMERA.z);
     this.scene.add(this.createHemisphereLight(), this.createKeyLight(), this.world);
 
-    this.cellGlobe =
-      worldMode === 'demo'
-        ? this.createShowcaseGlobe()
-        : createCellGlobeMesh(createGeodesicTopology());
-    this.world.add(this.cellGlobe);
+    if (worldMode === 'lod') {
+      this.cellGlobe = null;
+      this.worldLod = new WorldLodController(lodQualityProfile);
+      this.chunkRenderer = new ChunkRenderer();
+      this.world.add(this.chunkRenderer.group);
+    } else {
+      this.worldLod = null;
+      this.chunkRenderer = null;
+      this.cellGlobe =
+        worldMode === 'demo'
+          ? this.createShowcaseGlobe()
+          : createCellGlobeMesh(createGeodesicTopology());
+      this.world.add(this.cellGlobe);
+    }
     this.controls = new GlobeControls(this.world, this.camera, this.renderer.domElement);
 
     if (typeof ResizeObserver !== 'undefined') {
@@ -58,6 +74,17 @@ export class SceneRenderer {
       window.addEventListener('resize', this.resize);
     }
     this.resize();
+    if (this.worldLod !== null && this.chunkRenderer !== null) this.updateLod();
+  }
+
+  /** Anzahl aktiver Draw Calls (Chunks) im LOD-Modus; 0 in den übrigen Modi. */
+  public get activeChunkCount(): number {
+    return this.chunkRenderer?.activeChunkCount ?? 0;
+  }
+
+  /** Gesamtzahl aktuell materialisierter Zellen im LOD-Modus. */
+  public get activeCellCount(): number {
+    return this.chunkRenderer?.activeCellCount ?? 0;
   }
 
   public start(): void {
@@ -75,6 +102,10 @@ export class SceneRenderer {
     this.resizeObserver?.disconnect();
     this.controls.dispose();
     if (this.resizeObserver === null) window.removeEventListener('resize', this.resize);
+
+    // ChunkRenderer verwaltet seine Meshes selbst (differenzieller Cache); explizit disposen,
+    // bevor der generische world.traverse-Sweep unten läuft, damit keine Listener/Caches übrig bleiben.
+    this.chunkRenderer?.dispose();
 
     this.world.traverse((object) => {
       if (!(object instanceof THREE.Mesh)) return;
@@ -110,6 +141,7 @@ export class SceneRenderer {
     const deltaSeconds = Math.min((time - this.lastFrameTime) / 1000, 0.1);
     this.lastFrameTime = time;
     this.controls.update(deltaSeconds);
+    if (this.worldLod !== null && this.chunkRenderer !== null) this.updateLod();
     this.renderer.render(this.scene, this.camera);
     this.animationFrameId = requestAnimationFrame(this.renderFrame);
   };
@@ -123,4 +155,27 @@ export class SceneRenderer {
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height, false);
   };
+
+  /**
+   * Berechnet die aktuell sichtbare Chunk-Liste und aktualisiert den
+   * `ChunkRenderer` differenziell. Kamera und Sichtkegel werden in das
+   * lokale (unrotierte) Koordinatensystem der Welt transformiert, da
+   * `GlobeControls` die Kamera fix hält und stattdessen `this.world` rotiert
+   * (siehe `GlobeControls.applyRotation`).
+   */
+  private updateLod(): void {
+    if (this.worldLod === null || this.chunkRenderer === null) return;
+    const cameraState = computeLocalCameraState({
+      worldQuaternion: this.world.quaternion,
+      cameraPosition: this.camera.position,
+      cameraQuaternion: this.camera.quaternion,
+      fovDegrees: this.camera.fov,
+      aspect: this.camera.aspect,
+      viewportHeight: this.container.clientHeight || 1,
+      sphereRadius: 1,
+    });
+
+    const units = this.worldLod.update(cameraState);
+    this.chunkRenderer.update(units);
+  }
 }

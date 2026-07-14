@@ -299,28 +299,102 @@ hier als Entwurf festgehalten und in Folge-Issues konkretisiert:
 
 ## Migrationsplan
 
-1. **Phase 1 (dieses Issue, #57):** Nur Dokumentation und isolierte
+1. **Phase 1 (#57, abgeschlossen):** Nur Dokumentation und isolierte
    Identitäts-Grundlage (`src/topology/lod/identifiers.ts`). Kein Eingriff in
    `SceneRenderer`, `CellGlobe` oder die Renderpipeline.
-2. **Phase 2 (Folge-Issue):** Elternzuordnungs-Funktion (nächste-Zentren-
-   Zuordnung) plus Patch-Erzeugung je Elternzelle implementieren und gegen
-   Datumsgrenze/Pole testen (`tests/`-Fixtures analog zu
-   `tests/geodesic.test.ts`).
-3. **Phase 3 (Folge-Issue):** Chunk-Serialisierung für die Offline-
-   Datenpipeline (`data/`) inklusive `data/sources.json`-Erweiterung um
-   Level-/Chunk-Metadaten.
-4. **Phase 4 (Folge-Issue):** `SceneRenderer`/`CellGlobe` auf selektives
-   Laden/Entladen von Chunks nach Kameraabstand umstellen; bestehende
-   `createCellGlobeMesh`-Signatur bleibt pro Chunk unverändert nutzbar, da
-   ein Chunk selbst wieder eine gewöhnliche `GeodesicTopology`-Teilmenge ist.
-5. **Phase 5 (Folge-Issue):** Picking- und Auswahlzustand
-   (`tests/cell-picking.test.ts`) auf hierarchische `CellId`s umstellen.
+2. **Phase 2 (#58, abgeschlossen):** Elternzuordnungs-Funktion
+   (nächste-Zentren-Zuordnung, `nearestParentIndex` in
+   `src/topology/lod/hierarchy.ts`) plus Patch-/Chunk-Erzeugung je
+   Elternzelle implementiert und gegen Datumsgrenze/Pole getestet
+   (`tests/lod-hierarchy.test.ts`).
+3. **Phase 3 (weiterhin Folge-Issue, nicht Teil von #58):** Chunk-
+   Serialisierung für die Offline-Datenpipeline (`data/`) inklusive
+   `data/sources.json`-Erweiterung um Level-/Chunk-Metadaten. #58 hält Chunks
+   ausschließlich zur Laufzeit im Speicher (`WorldLodController`), lädt sie
+   aber nicht von einer statischen Datenquelle.
+4. **Phase 4 (#58, abgeschlossen):** `SceneRenderer` auf selektives
+   Laden/Entladen von Chunks nach Kameraabstand umgestellt
+   (`src/rendering/ChunkRenderer.ts`, neuer `WorldMode: 'lod'`); bestehende
+   `createCellGlobeGeometryData`-Pipeline bleibt pro Chunk unverändert
+   genutzt, da ein Chunk selbst wieder eine gewöhnliche
+   `GeodesicTopology`-Teilmenge ist. `earth`/`demo`-Modi bleiben unverändert
+   auf einem Voll-Welt-Mesh (Rückwärtskompatibilität, siehe unten).
+5. **Phase 5 (#58, abgeschlossen):** Picking (`src/input/CellPicking.ts`)
+   funktioniert unverändert über `mesh.userData.cellIds`, jetzt aber pro
+   Chunk-Mesh statt pro Welt-Mesh; IDs sind ab dieser Umsetzung hierarchisch
+   (`lvl<depth>-<name>/...`), siehe `tests/lod-picking.test.ts`. Eine
+   gespeicherte Auswahl über `parentIndex`-Traversierung nach einem
+   Auflösungswechsel ist strukturell möglich, aber keine eigene UI/Feature in
+   #58.
 
-Rückwärtskompatibilität während der Migration: `createGeodesicTopology`
-bleibt unverändert die Grundlage jeder einzelnen Ebene/jedes Patches; bis
-Phase 4 abgeschlossen ist, kann `SceneRenderer` weiterhin ausschließlich
-Level 0 (oder die heutige Einzeltopologie) verwenden, ohne dass das
-Identitätsschema oder spätere Phasen invalidiert werden.
+Rückwärtskompatibilität während/nach der Migration: `createGeodesicTopology`
+bleibt unverändert die Grundlage jeder einzelnen Ebene/jedes Patches;
+`SceneRenderer` unterstützt weiterhin `earth`/`demo` als reines
+Voll-Welt-Mesh unverändert zum Stand vor #58. Der neue `WorldMode: 'lod'`
+ist ein zusätzlicher, expliziter dritter Modus (`?world=lod`), der die
+selektive Chunk-Pipeline aktiviert; er ersetzt `earth`/`demo` nicht.
+
+### Ergebnisse aus #58 (gemessen, ersetzt die bisherigen Richtwerte teilweise)
+
+- **Sichtbarkeits-Culling:** reine 3D-Vektor-Operationen
+  (`src/topology/lod/selection.ts`, `isFrontFacing`/`isInFrustum`), keine
+  Lat/Lon-Sonderfälle. Horizont-Culling nutzt den exakten Tangentialwinkel
+  `acos(sphereRadius / cameraDistance)`.
+- **LOD-Metrik:** projizierte Zellgröße in Pixel über
+  Standard-Lochkamera-Projektion (`projectedCellSizePx`); Zellradius wird
+  aus dem mittleren Großkreisabstand Zentrum→Boundary-Punkte geschätzt
+  (`estimateCellRadius`/`estimateWorldRadius`).
+- **Sichtkegel mit Seitenverhältnis:** `isInFrustum` prüft gegen das
+  **größere** von vertikalem und (aus `aspect` abgeleitetem) horizontalem
+  halben FOV. Auf breiten Viewports werden dadurch Zellen am linken/rechten
+  Rand nicht fälschlich verworfen (getestet in `tests/lod-selection.test.ts`,
+  "keeps left/right edge cells on wide viewports"). Fehlt `aspect`, wird 1
+  angenommen.
+- **Kamera-Frame-Transform:** `computeLocalCameraState`
+  (`src/rendering/CameraFrame.ts`) drückt Kameraposition und Blickrichtung im
+  lokalen, unrotierten Weltframe aus (Inverse der `world`-Quaternion), da
+  `GlobeControls` die Welt statt der Kamera rotiert. Mit echtem three.js
+  (kein Mock) getestet in `tests/camera-frame.test.ts`
+  (Rückseiten-Chunk verworfen, Vorderseiten-Chunk behalten nach realer
+  Weltrotation).
+- **Hysterese + erzwungenes Budget:** `RefinementController` (mirrored auf
+  `LodController` aus `TileLod.ts`, eigener `RefinementState`-Typ pro Ebene,
+  getrennt von `LodLevel`). `WorldLodController.update` wertet je Elternzelle
+  die Hysterese aus und begrenzt die tatsächlich verfeinerten Eltern **hart**
+  auf `maxActiveChunks` (Priorisierung nach projizierter Größe/Kameranähe,
+  `selectRefinedParents`). Damit ist die Draw-Call-Zahl je Ebene durch das
+  Budget gedeckelt, nicht durch die adressierbare Zellzahl (getestet in
+  `tests/world-lod.test.ts`, "enforces the regional maxActiveChunks budget").
+  `regionalController`, `localController` und beide Chunk-Caches werden **jeden
+  Frame** auf die aktiven Eltern gepruned, sodass Panning über viele Regionen
+  keinen Zustand akkumuliert (getestet in "panning across regions does not
+  leak local hysteresis state").
+- **Rendering + Level-0-Bündelung:** `ChunkRenderer` hält genau ein
+  `THREE.Mesh`/Material pro aktivem Chunk (`unit.key`-adressiert); nicht
+  verfeinerte Level-0-Zellen werden zu **einer** gebündelten Unit
+  (`lvl0-global/root`) zusammengefasst – **nicht** eine Unit pro Zelle. Die
+  globale Übersicht rendert damit mit einer einzigen Level-0-Draw-Call plus
+  ggf. wenigen verfeinerten Regional-/Local-Chunks (getestet in
+  `tests/world-lod.test.ts`, "bundles all non-refined Level-0 cells into a
+  SINGLE unit"). Differenzielles `update()` fügt/entfernt nur geänderte
+  Chunks, `dispose()` gibt alle Geometrien/Materialien frei; Draw-Call-Zahl =
+  `activeChunkCount`, unabhängig von der Gesamtzahl adressierbarer Zellen
+  (getestet in `tests/chunk-renderer.test.ts`, "draw calls ... grow with
+  visible chunks"). Picking bleibt pro Chunk-Mesh über `userData.cellIds`
+  korrekt, auch für die gebündelte Level-0-Unit (jede enthaltene Zelle
+  behält ihre eigene hierarchische `CellId`).
+- **Qualitätsprofile:** `DESKTOP_QUALITY_PROFILE`/`MOBILE_QUALITY_PROFILE`
+  (`src/topology/lod/profiles.ts`) legen Patch-Frequenz, Hysterese-Schwellen
+  (Pixel) und `maxActiveChunks` je Ebene fest; das mobile Profil nutzt kleinere
+  Patch-Frequenzen (global f=4, regional f=4, local f=2) und kleinere
+  Chunk-Budgets als Desktop (global f=8, regional f=8, local f=4 – wie in der
+  ursprünglichen Budgettabelle oben angenommen). Die `maxActiveChunks`-Werte
+  sind dabei **wirksam** (siehe erzwungenes Budget oben), nicht nur
+  dokumentiert.
+- **Nicht in #58 gemessen:** reale GPU-Frame-Zeiten/Speicherprofile im
+  Browser (nur Struktur- und Ressourcenzählungen per Unit-Test verifiziert,
+  siehe `tests/chunk-renderer.test.ts` und `tests/world-lod.test.ts`); echte
+  Performancebudgets bleiben Aufgabe von #18.
 
 ## Konsequenzen
 

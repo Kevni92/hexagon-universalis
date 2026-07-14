@@ -1,10 +1,55 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('three', () => {
+  class Quaternion {
+    public x = 0;
+    public y = 0;
+    public z = 0;
+    public w = 1;
+    public clone(): Quaternion {
+      const copy = new Quaternion();
+      Object.assign(copy, this);
+      return copy;
+    }
+    public invert(): this {
+      return this;
+    }
+    public normalize(): this {
+      return this;
+    }
+    public setFromEuler(): this {
+      return this;
+    }
+  }
+
+  class Vector3 {
+    public constructor(
+      public x = 0,
+      public y = 0,
+      public z = 0,
+    ) {}
+    public clone(): Vector3 {
+      return new Vector3(this.x, this.y, this.z);
+    }
+    public applyQuaternion(): this {
+      return this;
+    }
+    public normalize(): this {
+      return this;
+    }
+    public set(x: number, y: number, z: number): this {
+      this.x = x;
+      this.y = y;
+      this.z = z;
+      return this;
+    }
+  }
+
   class Object3D {
     public children: Object3D[] = [];
     public rotation = { x: 0, y: 0 };
-    public position = { set: vi.fn() };
+    public position = new Vector3();
+    public quaternion = new Quaternion();
     public add(...objects: Object3D[]): void {
       this.children.push(...objects);
     }
@@ -18,7 +63,14 @@ vi.mock('three', () => {
     public background: unknown;
   }
 
-  class Group extends Object3D {}
+  class Group extends Object3D {
+    public clear(): void {
+      this.children = [];
+    }
+    public remove(...objects: Object3D[]): void {
+      this.children = this.children.filter((child) => !objects.includes(child));
+    }
+  }
 
   class Mesh extends Object3D {
     public name = '';
@@ -33,8 +85,10 @@ vi.mock('three', () => {
 
   class PerspectiveCamera extends Object3D {
     public aspect: number;
+    public fov: number;
     public constructor(...args: number[]) {
       super();
+      this.fov = args[0] ?? 45;
       this.aspect = args[1] ?? 1;
     }
     public updateProjectionMatrix = vi.fn();
@@ -113,11 +167,14 @@ vi.mock('three', () => {
     Group,
     HemisphereLight,
     IcosahedronGeometry,
+    MathUtils: { degToRad: (degrees: number) => (degrees * Math.PI) / 180 },
     Mesh,
     MeshStandardMaterial: Material,
     PerspectiveCamera,
+    Quaternion,
     Scene,
     SRGBColorSpace: 'srgb',
+    Vector3,
     WebGLRenderer,
   };
 });
@@ -238,5 +295,25 @@ describe('SceneRenderer', () => {
       userData: { cellIds: readonly string[] };
     };
     expect(globe.userData.cellIds.length).toBeGreaterThan(0);
+  });
+
+  it('renders the selective multi-LOD chunk pipeline in lod mode', async () => {
+    const { SceneRenderer } = await import('@/rendering/SceneRenderer');
+    const container = {
+      clientWidth: 800,
+      clientHeight: 600,
+      append: vi.fn(),
+    } as unknown as HTMLElement;
+
+    const renderer = new SceneRenderer(container, 'lod');
+
+    // Der Chunk-Renderer wird als eine Gruppe in world eingehängt, nicht
+    // als ein einzelnes Voll-Welt-Mesh.
+    expect(renderer.world.children).toHaveLength(1);
+    expect(renderer.activeChunkCount).toBeGreaterThan(0);
+    expect(renderer.activeCellCount).toBeGreaterThan(0);
+
+    renderer.dispose();
+    expect(renderer.activeChunkCount).toBe(0);
   });
 });

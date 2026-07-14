@@ -7,9 +7,19 @@ export interface App {
 
 const DEMO_STATUS = 'Tile-Demo – keine reale Erde';
 const EARTH_STATUS = 'Three.js-Testszene bereit';
+const LOD_STATUS = 'Multi-LOD-Testszene bereit';
+
+const WORLD_MODES: readonly WorldMode[] = ['earth', 'demo', 'lod'];
 
 export function resolveWorldMode(search: string): WorldMode {
-  return new URLSearchParams(search).get('world') === 'demo' ? 'demo' : 'earth';
+  const requested = new URLSearchParams(search).get('world');
+  return WORLD_MODES.find((mode) => mode === requested) ?? 'earth';
+}
+
+function statusForWorldMode(worldMode: WorldMode): string {
+  if (worldMode === 'demo') return DEMO_STATUS;
+  if (worldMode === 'lod') return LOD_STATUS;
+  return EARTH_STATUS;
 }
 
 export function createApp(root: HTMLElement, locationSearch = window.location.search): App {
@@ -20,7 +30,7 @@ export function createApp(root: HTMLElement, locationSearch = window.location.se
       <header class="app-header">
         <p class="eyebrow">Projektgrundlage</p>
         <h1>Hexagon Universalis</h1>
-      <p id="status" class="status" data-testid="app-status" role="status" aria-live="polite">${worldMode === 'demo' ? DEMO_STATUS : EARTH_STATUS}</p>
+      <p id="status" class="status" data-testid="app-status" role="status" aria-live="polite">${statusForWorldMode(worldMode)}</p>
       </header>
       <section class="viewport" data-testid="globe-viewport" aria-label="Interaktive 3D-Testszene"></section>
     </main>
