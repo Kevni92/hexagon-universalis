@@ -77,6 +77,10 @@ h1 {
   color: #b9c9e3;
 }
 
+.status-error {
+  color: #ffb4ab;
+}
+
 .viewport {
   grid-row: 1 / -1;
   min-width: 0;
