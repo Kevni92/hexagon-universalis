@@ -136,21 +136,15 @@ describe('prozedurales Weltmodell', () => {
 
     expect(tileTypes.has('deepSea')).toBe(true);
     expect(tileTypes.has('coastalWater')).toBe(true);
-    expect(
-      [...tileTypes].some((type) => type === 'sandCoast' || type === 'rockyCoast'),
-    ).toBe(true);
+    expect([...tileTypes].some((type) => type === 'sandCoast' || type === 'rockyCoast')).toBe(true);
     expect(
       [...tileTypes].some((type) =>
         ['temperateMixedForest', 'borealForest', 'tropicalRainforest'].includes(type),
       ),
     ).toBe(true);
-    expect(
-      [...tileTypes].some((type) => type === 'desert' || type === 'semiDesert'),
-    ).toBe(true);
+    expect([...tileTypes].some((type) => type === 'desert' || type === 'semiDesert')).toBe(true);
     expect(tileTypes.has('tundra')).toBe(true);
-    expect(
-      [...tileTypes].some((type) => type === 'wetland' || type === 'mangrove'),
-    ).toBe(true);
+    expect([...tileTypes].some((type) => type === 'wetland' || type === 'mangrove')).toBe(true);
     expect([...tileTypes].some((type) => type === 'iceWater' || modifiers.has('glacier'))).toBe(
       true,
     );
