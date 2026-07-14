@@ -42,7 +42,14 @@ Unterstützte Dichteprofile verwenden ausschließlich gültige geodätische Freq
 
 Generatorformat `1` und Generatorversion `1.0.0` sind Teil des Weltmodells. Gleiche Version, Konfiguration und Topologie erzeugen dieselbe JSON-Reihenfolge und denselben Fingerprint. Änderungen am Algorithmus müssen die Generatorversion erhöhen, sofern vorhandene Seeds danach andere Welten erzeugen.
 
-Die Referenz-Fingerprints für `reference-alpha` und `reference-beta` bei `low` und `standard` werden nach dem ersten CI-Lauf des realen Geodäsiecodes hier festgeschrieben und durch Unit-Tests geschützt.
+Folgende Referenz-Fingerprints werden durch Unit-Tests geschützt:
+
+| Seed              | Dichte     | Fingerprint    |
+| ----------------- | ---------- | -------------- |
+| `reference-alpha` | `low`      | `pw1-b493a193` |
+| `reference-alpha` | `standard` | `pw1-2c95e43d` |
+| `reference-beta`  | `low`      | `pw1-479f6748` |
+| `reference-beta`  | `standard` | `pw1-f2419ef2` |
 
 ## Fachliche Ausgabe pro Zelle
 
