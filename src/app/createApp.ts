@@ -11,9 +11,9 @@ export function createApp(root: HTMLElement): App {
       <header class="app-header">
         <p class="eyebrow">Projektgrundlage</p>
         <h1>Hexagon Universalis</h1>
-        <p id="status" class="status" role="status">Three.js-Testszene bereit</p>
+      <p id="status" class="status" data-testid="app-status" role="status" aria-live="polite">Three.js-Testszene bereit</p>
       </header>
-      <section class="viewport" aria-label="Interaktive 3D-Testszene"></section>
+      <section class="viewport" data-testid="globe-viewport" aria-label="Interaktive 3D-Testszene"></section>
     </main>
   `;
 
