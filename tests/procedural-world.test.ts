@@ -178,8 +178,12 @@ describe('prozedurales Weltmodell', () => {
       }).fingerprint,
     };
 
-    console.info('procedural-world-reference-fingerprints', fingerprints);
-    expect(new Set(Object.values(fingerprints))).toHaveLength(4);
+    expect(fingerprints).toEqual({
+      alphaLow: 'pw1-b493a193',
+      alphaStandard: 'pw1-2c95e43d',
+      betaLow: 'pw1-479f6748',
+      betaStandard: 'pw1-f2419ef2',
+    });
   });
 });
 
