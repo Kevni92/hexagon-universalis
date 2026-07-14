@@ -21,6 +21,7 @@
     "three": "^0.163.0"
   },
   "devDependencies": {
+    "@types/node": "^20.0.0",
     "@types/three": "^0.163.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
