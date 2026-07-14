@@ -36,6 +36,7 @@ export class SceneRenderer {
   private readonly earthRuntime: EarthChunkRuntime | null;
   private readonly earthModel = new EarthWorldModel();
   private visibleUnits: readonly import('@/topology/lod/WorldLod').VisibleUnit[] = [];
+  private requestedDataKey = '';
   public readonly ready: Promise<void>;
   private animationFrameId: number | null = null;
   private lastFrameTime = 0;
@@ -191,6 +192,7 @@ export class SceneRenderer {
 
     this.visibleUnits = this.worldLod.update(cameraState);
     this.chunkRenderer.update(this.visibleUnits);
+    this.requestVisibleEarthData();
   }
 
   private async initializeEarth(): Promise<void> {
@@ -199,5 +201,44 @@ export class SceneRenderer {
     if (this.disposed) return;
     this.earthModel.applyChunk(bootstrap);
     this.chunkRenderer.setCellColors(this.earthModel.cellColors(), this.visibleUnits);
+    this.requestVisibleEarthData();
+  }
+
+  private requestVisibleEarthData(): void {
+    const manifest = this.earthRuntime?.manifest;
+    if (manifest === null || manifest === undefined || this.chunkRenderer === null) return;
+    const requested = new Set<string>();
+    for (const unit of this.visibleUnits) {
+      if (unit.level === 0) continue;
+      const parentIndices = new Set(
+        unit.cells
+          .map((cell) => cell.id.parentIndex)
+          .filter((index): index is number => index !== null),
+      );
+      for (const entry of manifest.chunks) {
+        if (unit.level === 1 && entry.level === 'regional') {
+          if ([...parentIndices].some((index) => entry.chunkId.endsWith(`__c${index}`)))
+            requested.add(entry.chunkId);
+        }
+        // Das veroeffentlichte v1-Schema qualifiziert lokale Eltern noch nicht vollstaendig
+        // (#67). Bis zur Schemamigration werden alle eindeutigen c<index>-Treffer geladen.
+        if (unit.level === 2 && entry.level === 'local') {
+          if ([...parentIndices].some((index) => entry.chunkId.endsWith(`__c${index}`)))
+            requested.add(entry.chunkId);
+        }
+      }
+    }
+    const ids = [...requested].sort();
+    const key = ids.join('|');
+    if (key === this.requestedDataKey) return;
+    this.requestedDataKey = key;
+    void this.earthRuntime
+      ?.requireChunks(ids)
+      .then((chunks) => {
+        if (this.disposed || chunks.length === 0 || this.chunkRenderer === null) return;
+        for (const chunk of chunks) this.earthModel.applyChunk(chunk);
+        this.chunkRenderer.setCellColors(this.earthModel.cellColors(), this.visibleUnits);
+      })
+      .catch(() => undefined);
   }
 }
