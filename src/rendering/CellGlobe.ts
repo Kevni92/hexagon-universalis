@@ -73,7 +73,7 @@ export function createCellGlobeMesh(
   geometry.computeBoundingSphere();
 
   const material = new THREE.MeshStandardMaterial({
-    color: 0x4f8cff,
+    color: cellColors !== undefined ? 0xffffff : 0x4f8cff,
     flatShading: true,
     roughness: 0.72,
     metalness: 0.08,
