@@ -1,8 +1,9 @@
-import { SceneRenderer, type WorldMode } from '@/rendering/SceneRenderer';
+import { SceneRenderer, type SceneDiagnostics, type WorldMode } from '@/rendering/SceneRenderer';
 
 export interface App {
   start(): void;
   dispose(): void;
+  diagnostics(): SceneDiagnostics | null;
 }
 
 const DEMO_STATUS = 'Tile-Demo – keine reale Erde';
@@ -64,6 +65,7 @@ export function createApp(root: HTMLElement, locationSearch = window.location.se
 
   return {
     start: () => renderer?.start(),
+    diagnostics: () => renderer?.diagnostics ?? null,
     dispose: () => {
       renderer?.dispose();
       root.replaceChildren();
