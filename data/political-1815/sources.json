@@ -1,0 +1,22 @@
+{
+  "referenceDate": "1815-06-09",
+  "snapshotSemantics": "Vienna Congress Final Act political-legal order; not Hundred Days military control or November 1815 settlement",
+  "sources": [
+    {
+      "id": "historical-boundaries-1815-pending",
+      "title": "Historical political boundaries for the Vienna Congress snapshot",
+      "publisher": "To be selected from a licensed historical vector or public-domain georeferenced source",
+      "version": "pending-source-review",
+      "coverage": "global, with Central Europe validation slice required first",
+      "license": "pending verification",
+      "attribution": "pending verification",
+      "sha256": null,
+      "processing": [
+        "georeference",
+        "normalize WGS84",
+        "validate geometry",
+        "intersect geodesic cells"
+      ]
+    }
+  ]
+}
