@@ -108,7 +108,7 @@ export function derivePoliticalBorders(
     const firstMemberships = membershipByPolity.get(first.dominantPolityId) ?? [];
     const secondMemberships = membershipByPolity.get(second.dominantPolityId) ?? [];
     const type = firstMemberships.some((membership) => secondMemberships.includes(membership))
-      ? 'sovereign'
+      ? 'membership'
       : 'sovereign';
     borders.push({
       edgeId,

@@ -1,5 +1,7 @@
 import type { PoliticalArtifact, PoliticalBorder, PoliticalCell } from '@/data/political1815';
 import type { Vector3 } from '@/topology/geodesic';
+import type { EarthTileLevel } from '@/data/tilePyramid';
+import { politicalBorderVisibleAtLevel } from '@/data/PoliticalMultiLod';
 
 export interface PoliticalLayerOptions {
   readonly cellFill: boolean;
@@ -47,10 +49,13 @@ export function politicalBorderSegments(
   artifact: PoliticalArtifact,
   centers: ReadonlyMap<string, Vector3>,
   options: PoliticalLayerOptions = DEFAULT_POLITICAL_LAYER_OPTIONS,
+  level: EarthTileLevel = 'local',
 ): readonly PoliticalBorderSegment[] {
   return artifact.borders
-    .filter((border) =>
-      border.type === 'sovereign' ? options.sovereignBorders : options.membershipBorders,
+    .filter(
+      (border) =>
+        politicalBorderVisibleAtLevel(border.type, level) &&
+        (border.type === 'sovereign' ? options.sovereignBorders : options.membershipBorders),
     )
     .flatMap((border) => {
       const start = centers.get(border.firstCellId);
@@ -68,7 +73,11 @@ export function colorForPolity(polityId: string): string {
 }
 
 export class PoliticalLayerState {
+  public enabled = false;
   public options: PoliticalLayerOptions = { ...DEFAULT_POLITICAL_LAYER_OPTIONS };
+  public setEnabled(enabled: boolean): void {
+    this.enabled = enabled;
+  }
   public setOptions(next: Partial<PoliticalLayerOptions>): void {
     this.options = { ...this.options, ...next };
   }
