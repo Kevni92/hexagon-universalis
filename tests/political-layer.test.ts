@@ -72,10 +72,11 @@ describe('political layer', () => {
   });
 
   it('exposes historical cell data for the HUD', () => {
-    expect(
-      politicalInfoViewModel(artifact.cells[0] ?? null, artifact.polities[0] ?? null).map(
-        (row) => row.label,
-      ),
-    ).toContain('Referenzdatum');
+    const labels = politicalInfoViewModel(
+      artifact.cells[0] ?? null,
+      artifact.polities[0] ?? null,
+    ).map((row) => row.label);
+    expect(labels).toContain('Referenzdatum');
+    expect(labels).toContain('Souveraenitaet');
   });
 });

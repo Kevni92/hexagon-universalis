@@ -81,10 +81,14 @@ export function sourceViewModel(
 export function politicalInfoViewModel(
   cell: PoliticalCell | null,
   polity: PoliticalPolity | null,
+  sovereign: PoliticalPolity | null = polity,
+  region: PoliticalPolity | null = null,
 ): readonly { label: string; value: string }[] {
   if (cell === null || polity === null) return [];
   return [
     { label: 'Historische Einheit', value: polity.displayName },
+    { label: 'Souveraenitaet', value: sovereign?.displayName ?? 'Ungeklaert' },
+    ...(region === null ? [] : [{ label: 'Region/Verband', value: region.displayName }]),
     { label: 'Einheitstyp', value: polity.type },
     { label: 'Referenzdatum', value: '1815-06-09' },
     {
