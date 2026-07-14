@@ -52,3 +52,7 @@ Für die lokale Entwicklung stehen zusätzlich `npm run format` und der Vitest-W
 - `src/ui/` – DOM-basierte Benutzeroberfläche
 - `src/shared/` – allgemeine Hilfsfunktionen und Typen
 - `tests/` – automatisierte Tests
+
+## Mitarbeit
+
+Branch-Namensschema, Pull-Request-Anforderungen, lokale Prüfungen vor dem Push und empfohlene Branch-Protection-Regeln für `main` sind in [CONTRIBUTING.md](./CONTRIBUTING.md) dokumentiert.
