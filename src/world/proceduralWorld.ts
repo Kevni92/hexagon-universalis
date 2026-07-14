@@ -48,13 +48,7 @@ export const DEFAULT_PROCEDURAL_WORLD_CONFIG: ProceduralWorldConfig = {
 
 export type ProceduralSurface = 'land' | 'water';
 export type ProceduralReliefBand =
-  | 'deepSea'
-  | 'oceanFloor'
-  | 'shallowWater'
-  | 'lowland'
-  | 'hills'
-  | 'mountains'
-  | 'highMountains';
+  'deepSea' | 'oceanFloor' | 'shallowWater' | 'lowland' | 'hills' | 'mountains' | 'highMountains';
 export type ProceduralQualityFlag = 'coast-derived' | 'polar-climate';
 
 export interface ProceduralWorldCell {
