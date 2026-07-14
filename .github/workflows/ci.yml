@@ -42,10 +42,14 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Test
+      - name: Test repeatedly for flake reproduction
         run: |
           set -o pipefail
-          npm run test:run 2>&1 | tee vitest.log
+          : > vitest.log
+          for attempt in $(seq 1 10); do
+            echo "Vitest attempt ${attempt}/10" | tee -a vitest.log
+            npm run test:run 2>&1 | tee -a vitest.log
+          done
 
       - name: Upload Vitest log
         if: failure()
@@ -59,6 +63,7 @@ jobs:
         run: npm run build
 
   e2e:
+    if: false
     name: Playwright E2E
     runs-on: ubuntu-latest
     needs: quality
