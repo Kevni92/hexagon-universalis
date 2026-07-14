@@ -43,6 +43,28 @@ npm run build
 
 Für die lokale Entwicklung stehen zusätzlich `npm run format` und der Vitest-Watchmodus über `npm test` bereit.
 
+## GitHub Pages
+
+Die produktive Seite ist unter der Projekt-URL
+`https://kevni92.github.io/hexagon-universalis/` erreichbar. Vite verwendet im
+Produktionsbuild automatisch den Unterpfad `/hexagon-universalis/`; lokale
+Entwicklung bleibt unter `/` erreichbar. Gebündelte Assets aus `src/` werden
+von Vite korrekt referenziert. Dateien aus `public/` müssen über
+`import.meta.env.BASE_URL` oder einen relativen Pfad eingebunden werden und
+dürfen keinen hart codierten Pfad wie `/assets/...` verwenden.
+
+Der Workflow `.github/workflows/deploy-pages.yml` startet bei jedem Push auf
+`main` sowie manuell über `workflow_dispatch`. Pull Requests lösen kein
+produktives Deployment aus. Formatprüfung, Linting, Typecheck, Tests und
+Produktionsbuild müssen erfolgreich sein, bevor das Pages-Artefakt veröffentlicht
+wird. Bei einem fehlgeschlagenen Check oder Deployment bleibt die zuletzt
+erfolgreich veröffentlichte Version bestehen.
+
+Vor dem ersten Deployment muss unter _Settings → Pages_ als Quelle **GitHub
+Actions** ausgewählt werden. Ein fehlgeschlagenes Deployment lässt sich nach der
+Fehlerkorrektur über den Workflow-Button **Run workflow** erneut ausführen. Nur
+`main` wird produktiv veröffentlicht.
+
 ## Projektstruktur
 
 - `src/app/` – Start, Lebenszyklus und Zusammensetzung
