@@ -38,3 +38,8 @@ Architekturentscheidungen mit dauerhafter Tragweite werden als ADRs unter
 `docs/architecture/` festgehalten, beginnend mit
 [0001-hierarchical-geodesic-lod.md](./architecture/0001-hierarchical-geodesic-lod.md)
 zur mehrstufigen geodätischen Auflösungsarchitektur.
+
+Die Offline-Erzeugung, das komprimierte Chunkformat, Integritäts- und
+Größenprüfungen sowie die Debugkarten der realen Referenzregionen beschreibt
+[earth-tile-pyramid.md](./earth-tile-pyramid.md). Laufzeit-Laden und Rendering
+dieser Chunks bleiben bewusst Aufgabe von #60.

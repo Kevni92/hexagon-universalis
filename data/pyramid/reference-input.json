@@ -1,0 +1,399 @@
+{
+  "datasetVersion": "2026.07-reference-v1",
+  "parentTolerance": 0.02,
+  "topology": {
+    "architecture": "hierarchical-geodesic-lod",
+    "levels": [
+      { "name": "global", "frequency": 8 },
+      { "name": "regional", "frequency": 8 },
+      { "name": "local", "frequency": 4 }
+    ]
+  },
+  "sources": [
+    { "id": "natural-earth-land-10m", "version": "5.1.2" },
+    { "id": "gebco-global-relief", "version": "2024" },
+    { "id": "esa-worldcover", "version": "2021-v200" },
+    { "id": "hydrorivers", "version": "1.0" }
+  ],
+  "cells": [
+    {
+      "cellId": "lvl0-global/root/c0",
+      "latitude": 27.9881,
+      "longitude": 86.925,
+      "samples": [
+        {
+          "elevationMeters": 8849,
+          "landFraction": 1,
+          "terrainClass": "mountain",
+          "riverClasses": [],
+          "hasPoliticalBorder": true
+        }
+      ]
+    },
+    {
+      "cellId": "lvl1-regional/p0/c0",
+      "parentCellId": "lvl0-global/root/c0",
+      "latitude": 27.9881,
+      "longitude": 86.925,
+      "samples": [
+        {
+          "elevationMeters": 8849,
+          "landFraction": 1,
+          "terrainClass": "mountain",
+          "riverClasses": [],
+          "hasPoliticalBorder": true
+        }
+      ]
+    },
+    {
+      "cellId": "lvl2-local/p0/c0",
+      "parentCellId": "lvl1-regional/p0/c0",
+      "latitude": 27.9881,
+      "longitude": 86.925,
+      "samples": [
+        {
+          "elevationMeters": 8849,
+          "landFraction": 1,
+          "terrainClass": "mountain",
+          "riverClasses": [],
+          "hasPoliticalBorder": true
+        }
+      ]
+    },
+    {
+      "cellId": "lvl0-global/root/c1",
+      "latitude": 46.8,
+      "longitude": 9.8,
+      "samples": [
+        {
+          "elevationMeters": 2600,
+          "landFraction": 1,
+          "terrainClass": "highland",
+          "riverClasses": ["regional"],
+          "hasPoliticalBorder": true
+        }
+      ]
+    },
+    {
+      "cellId": "lvl1-regional/p1/c1",
+      "parentCellId": "lvl0-global/root/c1",
+      "latitude": 46.8,
+      "longitude": 9.8,
+      "samples": [
+        {
+          "elevationMeters": 2600,
+          "landFraction": 1,
+          "terrainClass": "highland",
+          "riverClasses": ["regional"],
+          "hasPoliticalBorder": true
+        }
+      ]
+    },
+    {
+      "cellId": "lvl2-local/p1/c1",
+      "parentCellId": "lvl1-regional/p1/c1",
+      "latitude": 46.8,
+      "longitude": 9.8,
+      "samples": [
+        {
+          "elevationMeters": 2600,
+          "landFraction": 1,
+          "terrainClass": "mountain",
+          "riverClasses": ["regional"],
+          "hasPoliticalBorder": true
+        }
+      ]
+    },
+    {
+      "cellId": "lvl0-global/root/c2",
+      "latitude": 23.4,
+      "longitude": 13.0,
+      "samples": [
+        {
+          "elevationMeters": 350,
+          "landFraction": 1,
+          "terrainClass": "desert",
+          "riverClasses": [],
+          "hasPoliticalBorder": true
+        }
+      ]
+    },
+    {
+      "cellId": "lvl1-regional/p2/c2",
+      "parentCellId": "lvl0-global/root/c2",
+      "latitude": 23.4,
+      "longitude": 13.0,
+      "samples": [
+        {
+          "elevationMeters": 350,
+          "landFraction": 1,
+          "terrainClass": "desert",
+          "riverClasses": [],
+          "hasPoliticalBorder": true
+        }
+      ]
+    },
+    {
+      "cellId": "lvl2-local/p2/c2",
+      "parentCellId": "lvl1-regional/p2/c2",
+      "latitude": 23.4,
+      "longitude": 13.0,
+      "samples": [
+        {
+          "elevationMeters": 350,
+          "landFraction": 1,
+          "terrainClass": "desert",
+          "riverClasses": [],
+          "hasPoliticalBorder": true
+        }
+      ]
+    },
+    {
+      "cellId": "lvl0-global/root/c3",
+      "latitude": -3.1,
+      "longitude": -60.0,
+      "samples": [
+        {
+          "elevationMeters": 90,
+          "landFraction": 1,
+          "terrainClass": "forest",
+          "riverClasses": ["major"],
+          "hasPoliticalBorder": false
+        }
+      ]
+    },
+    {
+      "cellId": "lvl1-regional/p3/c3",
+      "parentCellId": "lvl0-global/root/c3",
+      "latitude": -3.1,
+      "longitude": -60.0,
+      "samples": [
+        {
+          "elevationMeters": 90,
+          "landFraction": 1,
+          "terrainClass": "forest",
+          "riverClasses": ["major"],
+          "hasPoliticalBorder": false
+        }
+      ]
+    },
+    {
+      "cellId": "lvl2-local/p3/c3",
+      "parentCellId": "lvl1-regional/p3/c3",
+      "latitude": -3.1,
+      "longitude": -60.0,
+      "samples": [
+        {
+          "elevationMeters": 90,
+          "landFraction": 1,
+          "terrainClass": "forest",
+          "riverClasses": ["major"],
+          "hasPoliticalBorder": false
+        }
+      ]
+    },
+    {
+      "cellId": "lvl0-global/root/c4",
+      "latitude": -82,
+      "longitude": 20,
+      "samples": [
+        {
+          "elevationMeters": 2200,
+          "landFraction": 1,
+          "terrainClass": "snowIce",
+          "riverClasses": [],
+          "hasPoliticalBorder": false
+        }
+      ]
+    },
+    {
+      "cellId": "lvl1-regional/p4/c4",
+      "parentCellId": "lvl0-global/root/c4",
+      "latitude": -82,
+      "longitude": 20,
+      "samples": [
+        {
+          "elevationMeters": 2200,
+          "landFraction": 1,
+          "terrainClass": "snowIce",
+          "riverClasses": [],
+          "hasPoliticalBorder": false
+        }
+      ]
+    },
+    {
+      "cellId": "lvl2-local/p4/c4",
+      "parentCellId": "lvl1-regional/p4/c4",
+      "latitude": -82,
+      "longitude": 20,
+      "samples": [
+        {
+          "elevationMeters": 2200,
+          "landFraction": 1,
+          "terrainClass": "snowIce",
+          "riverClasses": [],
+          "hasPoliticalBorder": false
+        }
+      ]
+    },
+    {
+      "cellId": "lvl0-global/root/c5",
+      "latitude": 72,
+      "longitude": -40,
+      "samples": [
+        {
+          "elevationMeters": 1800,
+          "landFraction": 1,
+          "terrainClass": "snowIce",
+          "riverClasses": [],
+          "hasPoliticalBorder": false
+        }
+      ]
+    },
+    {
+      "cellId": "lvl1-regional/p5/c5",
+      "parentCellId": "lvl0-global/root/c5",
+      "latitude": 72,
+      "longitude": -40,
+      "samples": [
+        {
+          "elevationMeters": 1800,
+          "landFraction": 1,
+          "terrainClass": "snowIce",
+          "riverClasses": [],
+          "hasPoliticalBorder": false
+        }
+      ]
+    },
+    {
+      "cellId": "lvl2-local/p5/c5",
+      "parentCellId": "lvl1-regional/p5/c5",
+      "latitude": 72,
+      "longitude": -40,
+      "samples": [
+        {
+          "elevationMeters": 1800,
+          "landFraction": 1,
+          "terrainClass": "snowIce",
+          "riverClasses": [],
+          "hasPoliticalBorder": false
+        }
+      ]
+    },
+    {
+      "cellId": "lvl0-global/root/c6",
+      "latitude": 0,
+      "longitude": 179.8,
+      "samples": [
+        {
+          "elevationMeters": -4200,
+          "landFraction": 0,
+          "terrainClass": "deepWater",
+          "riverClasses": [],
+          "hasPoliticalBorder": false
+        }
+      ]
+    },
+    {
+      "cellId": "lvl1-regional/p6/c6",
+      "parentCellId": "lvl0-global/root/c6",
+      "latitude": 0,
+      "longitude": -180.2,
+      "samples": [
+        {
+          "elevationMeters": -4200,
+          "landFraction": 0,
+          "terrainClass": "deepWater",
+          "riverClasses": [],
+          "hasPoliticalBorder": false
+        }
+      ]
+    },
+    {
+      "cellId": "lvl2-local/p6/c6",
+      "parentCellId": "lvl1-regional/p6/c6",
+      "latitude": 0,
+      "longitude": 179.8,
+      "samples": [
+        {
+          "elevationMeters": -4200,
+          "landFraction": 0,
+          "terrainClass": "deepWater",
+          "riverClasses": [],
+          "hasPoliticalBorder": false
+        }
+      ]
+    },
+    {
+      "cellId": "lvl0-global/root/c7",
+      "latitude": 51.2,
+      "longitude": 1.5,
+      "samples": [
+        {
+          "elevationMeters": -40,
+          "landFraction": 0.2,
+          "terrainClass": "shallowWater",
+          "weight": 1,
+          "riverClasses": [],
+          "hasPoliticalBorder": true
+        },
+        {
+          "elevationMeters": 60,
+          "landFraction": 0.8,
+          "terrainClass": "coast",
+          "weight": 1,
+          "riverClasses": [],
+          "hasPoliticalBorder": true
+        }
+      ]
+    },
+    {
+      "cellId": "lvl1-regional/p7/c7",
+      "parentCellId": "lvl0-global/root/c7",
+      "latitude": 51.2,
+      "longitude": 1.5,
+      "samples": [
+        {
+          "elevationMeters": -40,
+          "landFraction": 0.2,
+          "terrainClass": "shallowWater",
+          "weight": 1,
+          "riverClasses": [],
+          "hasPoliticalBorder": true
+        },
+        {
+          "elevationMeters": 60,
+          "landFraction": 0.8,
+          "terrainClass": "coast",
+          "weight": 1,
+          "riverClasses": [],
+          "hasPoliticalBorder": true
+        }
+      ]
+    },
+    {
+      "cellId": "lvl2-local/p7/c7",
+      "parentCellId": "lvl1-regional/p7/c7",
+      "latitude": 51.2,
+      "longitude": 1.5,
+      "samples": [
+        {
+          "elevationMeters": -40,
+          "landFraction": 0.2,
+          "terrainClass": "shallowWater",
+          "weight": 1,
+          "riverClasses": [],
+          "hasPoliticalBorder": true
+        },
+        {
+          "elevationMeters": 60,
+          "landFraction": 0.8,
+          "terrainClass": "coast",
+          "weight": 1,
+          "riverClasses": [],
+          "hasPoliticalBorder": true
+        }
+      ]
+    }
+  ]
+}

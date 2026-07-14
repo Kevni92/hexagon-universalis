@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 180" role="img" aria-label="regional earth tile debug map">
+  <rect width="360" height="180" fill="#d9edf5"/>
+  <path d="M0 90H360M180 0V180" stroke="#ffffff" stroke-width="0.5"/>
+  <circle cx="266.925" cy="62.012" r="3" fill="#66584c"><title>lvl1-regional/p0/c0: mountain, 8849 m</title></circle>
+  <circle cx="189.8" cy="43.2" r="3" fill="#85755b"><title>lvl1-regional/p1/c1: highland, 2600 m</title></circle>
+  <circle cx="193" cy="66.6" r="3" fill="#c9a66b"><title>lvl1-regional/p2/c2: desert, 350 m</title></circle>
+  <circle cx="120" cy="93.1" r="3" fill="#2d7047"><title>lvl1-regional/p3/c3: forest, 90 m</title></circle>
+  <circle cx="200" cy="172" r="3" fill="#e8f4ff"><title>lvl1-regional/p4/c4: snowIce, 2200 m</title></circle>
+  <circle cx="140" cy="18" r="3" fill="#e8f4ff"><title>lvl1-regional/p5/c5: snowIce, 1800 m</title></circle>
+  <circle cx="359.8" cy="90" r="3" fill="#173b68"><title>lvl1-regional/p6/c6: deepWater, -4200 m</title></circle>
+  <circle cx="181.5" cy="38.8" r="3" fill="#c6a36a"><title>lvl1-regional/p7/c7: coast, 10 m</title></circle>
+</svg>
