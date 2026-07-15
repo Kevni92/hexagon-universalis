@@ -166,7 +166,9 @@ test('procedural terrain exposes relief, complete terrain groups and bounded det
   await canvas.dispatchEvent('wheel', { deltaY: 3_000 });
   await expect(canvas).toHaveAttribute('data-lod-level', 'global');
   await expect(canvas).toHaveAttribute('data-detail-instances', '0');
-  await canvas.dispatchEvent('wheel', { deltaY: -1_100 });
+  await canvas.dispatchEvent('wheel', { deltaY: -400 });
+  await expect(canvas).toHaveAttribute('data-lod-level', 'regional');
+  await canvas.dispatchEvent('wheel', { deltaY: -650 });
   await expect(canvas).toHaveAttribute('data-lod-level', 'local', { timeout: 15_000 });
   await expect
     .poll(async () => Number(await canvas.getAttribute('data-detail-instances')))
