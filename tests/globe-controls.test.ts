@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 
-import { GlobeControls, normalizeWheelDelta } from '@/input/GlobeControls';
+import {
+  GlobeControls,
+  normalizeWheelDelta,
+  rotationScaleForDistance,
+} from '@/input/GlobeControls';
 
 interface TestEvent {
   pointerId?: number;
@@ -98,6 +102,31 @@ describe('GlobeControls', () => {
     element.dispatch('wheel', { deltaY: -1_000_000, deltaMode: 0, preventDefault: vi.fn() });
 
     expect(camera.position.z).toBe(1.18);
+    controls.dispose();
+  });
+
+  it('slows rotation with surface distance in procedural close-up views', () => {
+    expect(rotationScaleForDistance(3.4)).toBe(1);
+    expect(rotationScaleForDistance(2.2)).toBeCloseTo(0.5);
+    expect(rotationScaleForDistance(1.18)).toBe(0.08);
+
+    const { camera, controls, element, world } = createControls({
+      inertia: false,
+      minDistance: 1.18,
+      zoomAdaptiveRotation: true,
+    });
+    element.dispatch('wheel', { deltaY: -1_000_000, deltaMode: 0, preventDefault: vi.fn() });
+    expect(camera.position.z).toBe(1.18);
+    element.dispatch('pointerdown', {
+      pointerId: 1,
+      pointerType: 'mouse',
+      button: 0,
+      clientX: 0,
+      clientY: 0,
+    });
+    element.dispatch('pointermove', { pointerId: 1, clientX: 100, clientY: 0 });
+
+    expect(world.rotation.y).toBeCloseTo(100 * 0.005 * 0.08);
     controls.dispose();
   });
 

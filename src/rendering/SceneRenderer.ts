@@ -90,7 +90,9 @@ export class SceneRenderer {
       this.world,
       this.camera,
       this.renderer.domElement,
-      worldMode === 'procedural' ? { minDistance: PROCEDURAL_MIN_CAMERA_DISTANCE } : {},
+      worldMode === 'procedural'
+        ? { minDistance: PROCEDURAL_MIN_CAMERA_DISTANCE, zoomAdaptiveRotation: true }
+        : {},
     );
 
     if (typeof ResizeObserver !== 'undefined') {

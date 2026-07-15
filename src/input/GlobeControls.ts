@@ -9,6 +9,7 @@ export interface GlobeControlsOptions {
   zoomSpeed?: number;
   inertia?: boolean;
   damping?: number;
+  zoomAdaptiveRotation?: boolean;
 }
 
 interface PointerPosition {
@@ -23,6 +24,7 @@ const DEFAULTS = {
   minDistance: 2.2,
   rotateSpeed: 0.005,
   zoomSpeed: 0.002,
+  zoomAdaptiveRotation: false,
 } as const;
 
 const PITCH_LIMIT = Math.PI / 2 - 0.01;
@@ -162,10 +164,14 @@ export class GlobeControls {
   private readonly preventDefault = (event: Event): void => event.preventDefault();
 
   private rotate(deltaX: number, deltaY: number, deltaTime: number): void {
-    this.yaw += deltaX * this.options.rotateSpeed;
-    this.pitch = clamp(this.pitch + deltaY * this.options.rotateSpeed, -PITCH_LIMIT, PITCH_LIMIT);
-    this.velocityYaw = (deltaX * this.options.rotateSpeed) / deltaTime;
-    this.velocityPitch = (deltaY * this.options.rotateSpeed) / deltaTime;
+    const distanceScale = this.options.zoomAdaptiveRotation
+      ? rotationScaleForDistance(this.getCameraDistance())
+      : 1;
+    const scaledRotateSpeed = this.options.rotateSpeed * distanceScale;
+    this.yaw += deltaX * scaledRotateSpeed;
+    this.pitch = clamp(this.pitch + deltaY * scaledRotateSpeed, -PITCH_LIMIT, PITCH_LIMIT);
+    this.velocityYaw = (deltaX * scaledRotateSpeed) / deltaTime;
+    this.velocityPitch = (deltaY * scaledRotateSpeed) / deltaTime;
     this.applyRotation();
   }
 
@@ -216,4 +222,22 @@ export function normalizeWheelDelta(event: Pick<WheelEvent, 'deltaY' | 'deltaMod
   const multiplier =
     event.deltaMode === 1 ? WHEEL_LINE_HEIGHT : event.deltaMode === 2 ? WHEEL_PAGE_HEIGHT : 1;
   return event.deltaY * multiplier;
+}
+
+export function rotationScaleForDistance(
+  distance: number,
+  sphereRadius = 1,
+  referenceDistance = 3.4,
+): number {
+  const referenceSurfaceDistance = referenceDistance - sphereRadius;
+  if (
+    !Number.isFinite(distance) ||
+    !Number.isFinite(sphereRadius) ||
+    !Number.isFinite(referenceDistance) ||
+    sphereRadius <= 0 ||
+    referenceSurfaceDistance <= 0
+  )
+    throw new RangeError('Rotations-Distanzparameter sind ungültig.');
+  const surfaceDistance = Math.max(0, distance - sphereRadius);
+  return clamp(surfaceDistance / referenceSurfaceDistance, 0.08, 1);
 }

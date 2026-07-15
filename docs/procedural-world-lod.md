@@ -51,6 +51,11 @@ zwischen dem Regionalwechsel bei mittlerer Entfernung und dem Lokalwechsel im ec
 ein deutlich größerer nutzbarer Zoombereich. Die Nahgrenze hält trotz des radial um 0,6 Prozent
 angehobenen Lokal-Overlays weiterhin Abstand zur Near-Clipping-Ebene.
 
+Die Pointerrotation ist im prozeduralen Modus ebenfalls zoomadaptiv. Maßgeblich ist der Abstand
+zwischen Kamera und Kugeloberfläche relativ zur Startansicht bei `3.4`: Dort gilt Faktor `1`, bei
+Distanz `2.2` ungefähr `0.5` und im Nahbereich `1.18` der begrenzte Faktor `0.08`. Derselbe Faktor
+gilt für die beim Loslassen übernommene Trägheitsgeschwindigkeit.
+
 Ungültige Seeds, Dichten und Generatorparameter werden vor der Welt- oder
 Topologiematerialisierung abgelehnt. Ein Seed-/Parameterwechsel leert nur den fachlichen
 Projektionscache. Ein Dichtewechsel ersetzt zusätzlich den Topologie- und Hysteresecontroller.
