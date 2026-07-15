@@ -175,7 +175,7 @@ export class ProceduralDetailRenderer {
     if (nextSignature === this.signature) return;
     this.signature = nextSignature;
     this.disposeMeshes();
-    if (typeof THREE.InstancedMesh !== 'function') return;
+    if (!('InstancedMesh' in THREE)) return;
 
     const byType = new Map<DetailType, ProceduralDetailPlacement[]>();
     for (const placement of createProceduralDetailPlan(units, projectedCell)) {
