@@ -138,6 +138,16 @@ describe('ProceduralWorldLod', () => {
     expect(world.profile.levelCellCounts.global).toBe(642);
   });
 
+  it('behält bei einer ungültigen Neukonfiguration die bisherige gültige Welt atomar bei', () => {
+    const world = new ProceduralWorldLod({ seed: 'valid-world', density: 'standard' });
+    const fingerprint = world.fingerprint;
+
+    expect(() => world.reconfigure({ seed: '' })).toThrow(/Seed/);
+    expect(world.config.seed).toBe('valid-world');
+    expect(world.fingerprint).toBe(fingerprint);
+    expect(world.cacheStats.generation).toBe(1);
+  });
+
   it('pruned Projektionen beim Schwenken und leert alle Ressourcen beim Dispose', () => {
     const world = new ProceduralWorldLod({ density: 'standard' });
     for (const position of [

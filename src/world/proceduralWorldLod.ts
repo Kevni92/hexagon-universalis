@@ -185,8 +185,9 @@ export class ProceduralWorldLod {
     const next = normalizeProceduralWorldConfig({ ...this.configValue, ...config });
     if (JSON.stringify(next) === JSON.stringify(this.configValue)) return;
     const densityChanged = next.density !== this.configValue.density;
+    const nextReferenceWorld = createProceduralWorld(next);
     this.configValue = next;
-    this.referenceWorld = createProceduralWorld(next);
+    this.referenceWorld = nextReferenceWorld;
     this.projectedById.clear();
     this.colorsById.clear();
     this.generation += 1;
