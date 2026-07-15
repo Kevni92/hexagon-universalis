@@ -42,13 +42,13 @@ export const PROCEDURAL_LOD_PROFILES: Readonly<
       name: 'procedural-low',
       levels: {
         global: level(4, Infinity, 0, 1),
-        regional: level(8, 70, 50, 1),
+        regional: level(8, 70, 66, 1),
         local: level(16, 70, 52, 1),
       },
     },
     levelCellCounts: { global: 162, regional: 642, local: 2562 },
-    maxActiveCells: 3366,
-    maxDrawCalls: 3,
+    maxActiveCells: 2562,
+    maxDrawCalls: 1,
     generationBudgetMs: 40,
   },
   standard: {
@@ -57,13 +57,13 @@ export const PROCEDURAL_LOD_PROFILES: Readonly<
       name: 'procedural-standard',
       levels: {
         global: level(8, Infinity, 0, 1),
-        regional: level(16, 35, 25, 1),
+        regional: level(16, 35, 34, 1),
         local: level(32, 55, 40, 1),
       },
     },
     levelCellCounts: { global: 642, regional: 2562, local: 10242 },
-    maxActiveCells: 13446,
-    maxDrawCalls: 3,
+    maxActiveCells: 10242,
+    maxDrawCalls: 1,
     generationBudgetMs: 90,
   },
   high: {
@@ -72,13 +72,13 @@ export const PROCEDURAL_LOD_PROFILES: Readonly<
       name: 'procedural-high',
       levels: {
         global: level(16, Infinity, 0, 1),
-        regional: level(24, 18, 13, 1),
+        regional: level(24, 18, 17, 1),
         local: level(32, 28, 20, 1),
       },
     },
     levelCellCounts: { global: 2562, regional: 5762, local: 10242 },
-    maxActiveCells: 18566,
-    maxDrawCalls: 3,
+    maxActiveCells: 10242,
+    maxDrawCalls: 1,
     generationBudgetMs: 180,
   },
 };
@@ -248,11 +248,8 @@ export function validateProceduralLodProfiles(): void {
       PROCEDURAL_DENSITY_PROFILES[density as ProceduralDensityProfileId].cellCount
     )
       throw new RangeError(`Globale Zellzahl passt nicht zum Dichteprofil ${density}.`);
-    const totalCells = Object.values(profile.levelCellCounts).reduce(
-      (sum, count) => sum + count,
-      0,
-    );
-    if (profile.maxDrawCalls !== 3 || profile.maxActiveCells < totalCells)
+    const largestLevel = Math.max(...Object.values(profile.levelCellCounts));
+    if (profile.maxDrawCalls !== 1 || profile.maxActiveCells < largestLevel)
       throw new RangeError(`Ungültiges Laufzeitbudget für ${density}.`);
   }
 }

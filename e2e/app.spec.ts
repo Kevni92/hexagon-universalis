@@ -1,5 +1,9 @@
 import { expect, test, type Locator } from '@playwright/test';
 
+// Die Suite erzeugt pro Test einen WebGL-Kontext. Parallele Software-Renderer
+// konkurrieren in CI um denselben GPU-Prozess und verfälschen LOD-Zeitlimits.
+test.describe.configure({ mode: 'serial' });
+
 type ProceduralLod = 'global' | 'regional' | 'local';
 
 async function zoomUntilLod(
@@ -114,6 +118,7 @@ test('globe canvas accepts pointer and wheel interaction', async ({ page }) => {
 test('procedural world reaches Global, Regional and Lokal without console errors', async ({
   page,
 }) => {
+  test.slow();
   const pageErrors: Error[] = [];
   page.on('pageerror', (error) => pageErrors.push(error));
 
@@ -128,11 +133,19 @@ test('procedural world reaches Global, Regional and Lokal without console errors
 
   await zoomUntilLod(canvas, 'regional', -400);
   await expect(lodOutput).toHaveText('Regional');
+  await expect(page.getByTestId('procedural-frequency')).toHaveText('f=16');
+  await expect(page.getByTestId('procedural-cell-count')).toHaveText('2.562');
+  await expect(canvas).toHaveAttribute('data-lod-finest-cell-count', '2562');
+  await expect(canvas).toHaveAttribute('data-detail-instances', '0');
   await expect
     .poll(async () => Number(await canvas.getAttribute('data-camera-distance')))
     .toBeGreaterThan(2);
   await zoomUntilLod(canvas, 'local', -400);
   await expect(lodOutput).toHaveText('Lokal');
+  await expect(page.getByTestId('procedural-frequency')).toHaveText('f=32');
+  await expect(page.getByTestId('procedural-cell-count')).toHaveText('10.242');
+  await expect(canvas).toHaveAttribute('data-lod-finest-cell-count', '10242');
+  await expect(canvas).toHaveAttribute('data-detail-instances', /^[1-9]\d*$/);
   await expect
     .poll(async () => Number(await canvas.getAttribute('data-camera-distance')))
     .toBeLessThan(1.5);

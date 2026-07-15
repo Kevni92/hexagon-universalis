@@ -82,7 +82,7 @@ export function createProceduralDetailPlan(
 
   for (const unit of [...units].sort((left, right) => left.key.localeCompare(right.key))) {
     const level = levelName(unit.level);
-    if (level === 'global') continue;
+    if (level !== 'local') continue;
     const entries = unit.cells
       .map((lodCell, index) => {
         const cellId = visibleCellId(unit, index);
@@ -101,7 +101,7 @@ export function createProceduralDetailPlan(
     const byTopologyId = new Map(entries.map((entry) => [entry.lodCell.cell.id, entry] as const));
 
     for (const entry of entries) {
-      const count = level === 'regional' ? 1 : 3;
+      const count = 3;
       for (const detail of createTileDetails({
         cellId: entry.cellId,
         tileType: entry.projected.tileType,
@@ -111,7 +111,7 @@ export function createProceduralDetailPlan(
         append(detail, entry, level, false);
     }
 
-    const transitionLod: TransitionLod = level === 'regional' ? 1 : 3;
+    const transitionLod: TransitionLod = 3;
     for (const source of entries) {
       for (const neighborTopologyId of source.lodCell.cell.neighborIds) {
         const target = byTopologyId.get(neighborTopologyId);

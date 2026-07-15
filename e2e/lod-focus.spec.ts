@@ -37,7 +37,7 @@ function expectStableFocus(current: LodFocusState, reference: LodFocusState): vo
   expect(current.focusAngle).toBeLessThan(0.2);
 }
 
-test('high-density Lokal-LOD behält bei reinem Zoom den zentralen Parent-Fokus', async ({
+test('high-density Lokal-LOD behält bei reinem Zoom Volltopologie und Fokus', async ({
   page,
 }, testInfo) => {
   test.slow();
@@ -50,12 +50,14 @@ test('high-density Lokal-LOD behält bei reinem Zoom den zentralen Parent-Fokus'
   await expect(page.getByTestId('procedural-generation-status')).toHaveText('Welt bereit');
   await expect(canvas).toHaveAttribute('data-world-fingerprint', /.+/, { timeout: 45_000 });
 
-  // Ein einzelner kontrollierter Impuls erreicht die bekannte Nahgrenze 1,18,
+  // Ein einzelner kontrollierter Impuls erreicht die Nahgrenze 1,20,
   // ohne während der teuren High-Density-Materialisierung weitere Frames zu fluten.
   await canvas.dispatchEvent('wheel', { deltaY: -3_000 });
   await expect(canvas).toHaveAttribute('data-lod-level', 'local', { timeout: 45_000 });
-  await expect(canvas).toHaveAttribute('data-camera-distance', '1.18', { timeout: 45_000 });
-  await expect(canvas).toHaveAttribute('data-lod-local-parents', /\d+:\d+/, { timeout: 45_000 });
+  await expect(canvas).toHaveAttribute('data-camera-distance', '1.20', { timeout: 45_000 });
+  await expect(canvas).toHaveAttribute('data-lod-finest-unit-keys', 'lvl2-local/visible', {
+    timeout: 45_000,
+  });
 
   const box = await canvas.boundingBox();
   expect(box).not.toBeNull();
@@ -69,11 +71,11 @@ test('high-density Lokal-LOD behält bei reinem Zoom den zentralen Parent-Fokus'
   });
 
   await canvas.dispatchEvent('wheel', { deltaY: 20 });
-  await expect(canvas).toHaveAttribute('data-camera-distance', '1.22', { timeout: 45_000 });
+  await expect(canvas).toHaveAttribute('data-camera-distance', '1.24', { timeout: 45_000 });
   expectStableFocus(await readFocusState(canvas), reference);
 
   await canvas.dispatchEvent('wheel', { deltaY: -20 });
-  await expect(canvas).toHaveAttribute('data-camera-distance', '1.18', { timeout: 45_000 });
+  await expect(canvas).toHaveAttribute('data-camera-distance', '1.20', { timeout: 45_000 });
   expectStableFocus(await readFocusState(canvas), reference);
 
   await testInfo.attach('issue-88-high-local-zoom-end', {

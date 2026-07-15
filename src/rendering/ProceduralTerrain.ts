@@ -13,12 +13,6 @@ export const PROCEDURAL_RELIEF_PROFILE: ReliefProfile = {
   maxOceanDrop: 0.018,
 };
 
-const LOD_SURFACE_OFFSET: Readonly<Record<ProceduralWorldLodLevel, number>> = {
-  global: 0,
-  regional: 0.003,
-  local: 0.006,
-};
-
 const FOREST_TYPES = new Set<TileType>([
   'temperateMixedForest',
   'borealForest',
@@ -54,10 +48,8 @@ export function proceduralElevationMeters(elevation: number): number {
 }
 
 export function proceduralSurfaceRadius(elevation: number, level: ProceduralWorldLodLevel): number {
-  return (
-    elevationToRadius(proceduralElevationMeters(elevation), PROCEDURAL_RELIEF_PROFILE) +
-    LOD_SURFACE_OFFSET[level]
-  );
+  if (level === 'global') return PROCEDURAL_RELIEF_PROFILE.baseRadius;
+  return elevationToRadius(proceduralElevationMeters(elevation), PROCEDURAL_RELIEF_PROFILE);
 }
 
 export function proceduralTileColor(
@@ -96,7 +88,7 @@ export function proceduralTerrainDiagnostics(
     if (cell.tileType === 'wetland' || cell.tileType === 'mangrove') groups.add('wetland');
     groups.add(reliefGroup(cell.relief));
   }
-  const radii = cells.map((cell) => proceduralSurfaceRadius(cell.elevation, 'global'));
+  const radii = cells.map((cell) => proceduralSurfaceRadius(cell.elevation, 'regional'));
   return {
     terrainTypes,
     reliefBands,

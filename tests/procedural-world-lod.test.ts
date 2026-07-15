@@ -5,13 +5,13 @@ import { estimateCellRadius } from '@/topology/lod/hierarchy';
 import type { CameraState } from '@/topology/lod/selection';
 import { PROCEDURAL_LOD_PROFILES, ProceduralWorldLod } from '@/world/proceduralWorldLod';
 
-function camera(distance: number): CameraState {
+function camera(distance: number, viewportHeight = 800): CameraState {
   return {
     position: { x: 0, y: 0, z: distance },
     forward: { x: 0, y: 0, z: -1 },
     fovY: (45 * Math.PI) / 180,
     aspect: 4 / 3,
-    viewportHeight: 800,
+    viewportHeight,
     sphereRadius: 1,
   };
 }
@@ -38,7 +38,7 @@ describe('ProceduralWorldLod', () => {
       const { global, regional, local } = profile.quality.levels;
       expect(global.frequency).toBeLessThan(regional.frequency);
       expect(regional.frequency).toBeLessThan(local.frequency);
-      expect(profile.maxDrawCalls).toBe(3);
+      expect(profile.maxDrawCalls).toBe(1);
     }
   });
 
@@ -48,54 +48,51 @@ describe('ProceduralWorldLod', () => {
       density: 'standard',
     });
 
-    const global = world.update(camera(10));
+    const global = world.update(camera(3.4));
     expect(new Set(global.map((unit) => unit.level))).toEqual(new Set([0]));
     expect(global).toHaveLength(1);
     expect(global[0]?.cells).toHaveLength(642);
 
     const regional = world.update(camera(2.8));
-    expect(new Set(regional.map((unit) => unit.level))).toEqual(new Set([0, 1]));
-    expect(cellsAtLevel(regional, 0).length).toBeLessThan(642);
-    expect(cellsAtLevel(regional, 1).length).toBeGreaterThan(0);
-    expect(cellsAtLevel(regional, 1).length).toBeLessThan(2562);
+    expect(new Set(regional.map((unit) => unit.level))).toEqual(new Set([1]));
+    expect(regional).toHaveLength(1);
+    expect(cellsAtLevel(regional, 1)).toHaveLength(2562);
 
     const regionalOnly = world.update(camera(2.2));
-    expect(new Set(regionalOnly.map((unit) => unit.level))).toEqual(new Set([0, 1]));
+    expect(new Set(regionalOnly.map((unit) => unit.level))).toEqual(new Set([1]));
 
-    const local = world.update(camera(1.18));
-    expect(new Set(local.map((unit) => unit.level))).toEqual(new Set([0, 1, 2]));
-    expect(cellsAtLevel(local, 2).length).toBeGreaterThan(0);
-    expect(cellsAtLevel(local, 2).length).toBeLessThan(10242);
+    const local = world.update(camera(1.2));
+    expect(new Set(local.map((unit) => unit.level))).toEqual(new Set([2]));
+    expect(local).toHaveLength(1);
+    expect(cellsAtLevel(local, 2)).toHaveLength(10242);
     expect(meanRadius(regional, 1)).toBeLessThan(meanRadius(global, 0));
-    expect(meanRadius(local, 2)).toBeLessThan(meanRadius(local, 1));
+    expect(meanRadius(local, 2)).toBeLessThan(meanRadius(regional, 1));
+    expect(world.update(camera(3.4))[0]?.level).toBe(0);
     expect(world.config.seed).toBe('lod-reference');
     expect(world.fingerprint).toMatch(/^pw1-[0-9a-f]{8}$/);
   });
 
-  it('ersetzt Elternflächen hierarchisch statt Global-, Regional- und Lokalflächen zu überlagern', () => {
-    const world = new ProceduralWorldLod({
-      seed: 'exclusive-lod',
-      density: 'standard',
-    });
-    const units = world.update(camera(1.18));
-    const globalIndices = new Set(cellsAtLevel(units, 0).map((cell) => cell.id.index));
+  it('verwendet viewportweit genau eine vollständige Zellauflösung', () => {
+    const world = new ProceduralWorldLod({ seed: 'exclusive-lod', density: 'standard' });
 
-    for (const regionalCell of cellsAtLevel(units, 1)) {
-      if (regionalCell.parentIndex !== null)
-        expect(globalIndices.has(regionalCell.parentIndex)).toBe(false);
+    for (const [distance, expectedLevel, expectedCells] of [
+      [10, 0, 642],
+      [2.8, 1, 2562],
+      [1.2, 2, 10242],
+    ] as const) {
+      const units = world.update(camera(distance));
+      expect(units).toHaveLength(1);
+      expect(units[0]?.level).toBe(expectedLevel);
+      expect(units[0]?.cells).toHaveLength(expectedCells);
     }
+  });
 
-    for (const localUnit of units.filter((unit) => unit.level === 2)) {
-      const match = /\/g(\d+)\/p(\d+)$/.exec(localUnit.key);
-      expect(match).not.toBeNull();
-      const globalParent = Number.parseInt(match?.[1] ?? '-1', 10);
-      const regionalParent = Number.parseInt(match?.[2] ?? '-1', 10);
-      expect(globalIndices.has(globalParent)).toBe(false);
-      expect(
-        cellsAtLevel(units, 1).some(
-          (cell) => cell.parentIndex === globalParent && cell.id.index === regionalParent,
-        ),
-      ).toBe(false);
+  it('schaltet unabhängig von der Viewporthöhe bei denselben Kameradistanzen', () => {
+    for (const viewportHeight of [640, 720, 800, 1080]) {
+      const world = new ProceduralWorldLod({ density: 'standard' });
+      expect(world.update(camera(3.4, viewportHeight))[0]?.level).toBe(0);
+      expect(world.update(camera(2.8, viewportHeight))[0]?.level).toBe(1);
+      expect(world.update(camera(1.2, viewportHeight))[0]?.level).toBe(2);
     }
   });
 
@@ -142,7 +139,7 @@ describe('ProceduralWorldLod', () => {
 
   it('verwendet voll qualifizierte lokale IDs ohne doppelt sichtbare Picking-Flächen', () => {
     const world = new ProceduralWorldLod({ density: 'standard' });
-    const units = world.update(camera(1.18));
+    const units = world.update(camera(1.2));
     const ids = units.flatMap((unit) =>
       unit.cells.map((_cell, index) => visibleCellId(unit, index)),
     );

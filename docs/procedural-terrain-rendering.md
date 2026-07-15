@@ -1,13 +1,13 @@
 # Prozedurale Terrain-, Relief- und Detaildarstellung
 
-Issue #80 verbindet die prozedurale Referenzwelt aus #77 mit der Global-/Regional-/Lokal-Pipeline aus #78. Issue #86 schließt die Reliefgeometrie und verhindert gleichzeitig sichtbare Eltern-/Kindüberlagerungen. Die echte Erde, die Tile-Demo und die reine LOD-Diagnose bleiben unverändert.
+Issue #80 verbindet die prozedurale Referenzwelt aus #77 mit der Global-/Regional-/Lokal-Pipeline aus #78. Issue #86 schließt die Reliefgeometrie. Issue #91 ersetzt sichtbare Eltern-/Kindmischungen durch viewportweit einheitliche Topologien. Die echte Erde, die Tile-Demo und die reine LOD-Diagnose bleiben unverändert.
 
 ## Datenfluss
 
 1. `ProceduralWorldLod` projiziert jede sichtbare LOD-Zelle räumlich auf die deterministische Referenzwelt.
 2. Neben Terrain-Typ, Höhe, Temperatur und Feuchtigkeit bleiben Reliefband und Tile-Modifikatoren erhalten.
-3. `ProceduralWorldLodController` ersetzt verfeinerte Elternzellen durch ihre Kinder. Außerhalb der verfeinerten Region bleibt die globale Stufe als geschlossene Rückfallkugel erhalten; dieselbe Raumregion wird nie gleichzeitig als Global-, Regional- und Lokalfläche gezeichnet.
-4. `ChunkRenderer` erzeugt weiterhin höchstens ein gebündeltes Flächen-Mesh pro aktiver LOD-Stufe. Relief-Tiles bestehen aus einer radial stabilen Deckfläche und gebündelten Seitenflächen.
+3. `ProceduralWorldLodController` wählt genau eine vollständige Kugeltopologie für den gesamten Viewport. Global-, Regional- und Lokalflächen werden nie im selben Frame gemischt.
+4. `ChunkRenderer` erzeugt genau ein gebündeltes Flächen-Mesh für die aktive LOD-Stufe. Relief-Tiles bestehen aus einer radial stabilen Deckfläche und gebündelten Seitenflächen.
 5. Ein gemeinsamer innerer Planetenkörper schließt LOD-Nähte und den Raum unter den Podesten, ohne auswählbar zu sein.
 6. `ProceduralDetailRenderer` bündelt Bäume, Sträucher, Gras, Felsen und Eis als ein `InstancedMesh` pro Detailtyp.
 7. Nachbarschaftsübergänge verwenden die deterministischen Regeln aus #61. Jede gemeinsame Kante besitzt genau einen kanonischen Planer; Wasser, Gletscher und unvereinbare Übergänge bleiben ausgeschlossen.
@@ -26,7 +26,8 @@ Anschließend wird das logarithmische Spiel-Relief aus `Relief.ts` mit einem eng
 - Meeresspiegelradius: `1`
 - maximale Landanhebung: `0,065`
 - maximale Ozeanabsenkung: `0,018`
-- LOD-Oberflächenabstand: Global `0`, Regional `0,003`, Lokal `0,006`
+- Global: einheitlicher Radius `1`, also bewusst kein Relief
+- Regional und Lokal: identisches Höhenrelief ohne künstlichen radialen Stufenversatz
 
 Die Abbildung ist monoton: Tiefsee liegt stets unter Flachwasser, Flachland unter Hügeln, Hügel unter Gebirge und Gebirge unter Hochgebirge.
 
@@ -56,19 +57,19 @@ Die Standardkonfiguration weist im Renderer alle verpflichtenden Gruppen aus: Wa
 
 | Stufe    | Zellflächen                     | Basisdetails                     | Kantenübergänge            |
 | -------- | ------------------------------- | -------------------------------- | -------------------------- |
-| Global   | gebündelte geschlossene Podeste | keine                            | keine                      |
-| Regional | gebündelte geschlossene Podeste | 1 je geeigneter sichtbarer Zelle | bis 2 je geeigneter Kante  |
+| Global   | gebündelte flache Zellen        | keine                            | keine                      |
+| Regional | gebündelte geschlossene Podeste | keine                            | keine                      |
 | Lokal    | gebündelte geschlossene Podeste | 3 je geeigneter sichtbarer Zelle | bis 10 je geeigneter Kante |
 
 Zusätzlich gelten die festen globalen Instanzobergrenzen aus `detailTypeBudgets()`. Sie verhindern, dass dichte Wälder oder viele Übergangskanten die Instanzzahl unbeschränkt erhöhen. Es entstehen höchstens:
 
-- 3 Draw Calls für sichtbare Zell-Chunks
+- 1 Draw Call für die aktive Zelltopologie
 - 1 Draw Call für den inneren Planetenkörper
 - 12 Draw Calls für Detailtypen
 - 16 Draw Calls für die vollständige prozedurale Terrainpipeline
 - 1 Material pro aktiver Zellstufe, 1 Substratmaterial und 1 Material pro aktivem Detailtyp
 
-Globale Einzelobjekte sind ausdrücklich ausgeschlossen. Wasser, Gletscher und Hochgebirge erhalten keine Vegetationsinstanzen. Detailposition, Rotation und Skalierung hängen ausschließlich von stabiler Zell-/Kanten-ID, Tile-Typ, Detailtyp, Index und LOD ab.
+Globale und regionale Einzelobjekte sind ausdrücklich ausgeschlossen. Wasser, Gletscher und Hochgebirge erhalten auch lokal keine Vegetationsinstanzen. Detailposition, Rotation und Skalierung hängen ausschließlich von stabiler Zell-/Kanten-ID, Tile-Typ, Detailtyp, Index und LOD ab.
 
 ## Picking und Lebenszyklus
 
@@ -90,4 +91,4 @@ Der prozedurale Canvas veröffentlicht für Tests und Diagnose:
 - `data-relief-minimum`
 - `data-relief-maximum`
 
-Unit- und Renderingtests prüfen Deck-/Seitendreiecke, Basissradius, Substratradius, radiale Grenzen, Picking-Ausschluss, Picking-IDs, hierarchischen Elternersatz, Draw Calls und Dispose. Playwright reproduziert Issue #86 zusätzlich mit Seed `fgh`, Dichte `Niedrig`, Lokal-LOD und schräger Kameraperspektive; der Bericht enthält einen Abnahme-Screenshot.
+Unit- und Renderingtests prüfen Deck-/Seitendreiecke, Basissradius, Substratradius, radiale Grenzen, Picking-Ausschluss, Picking-IDs, exklusive Volltopologien, Draw Calls und Dispose. Playwright reproduziert die Lokalansicht zusätzlich mit Seed `fgh`, Dichte `Niedrig` und schräger Kameraperspektive; der Bericht enthält einen Abnahme-Screenshot.

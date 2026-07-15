@@ -6,9 +6,9 @@ import type { CameraState } from '@/topology/lod/selection';
 import { ProceduralWorldLod } from '@/world/proceduralWorldLod';
 
 describe('prozeduraler LOD-Kamerafokus', () => {
-  it('liefert für denselben Kamera- und Weltzustand identische sichtbare Units und Parent-IDs', () => {
+  it('liefert für denselben Kamera- und Weltzustand identische Units und Fokusdiagnosen', () => {
     const world = new ProceduralWorldLod({ seed: 'fgh', density: 'standard' });
-    const state = camera({ x: 0, y: 0, z: 1 }, 1.18);
+    const state = camera({ x: 0, y: 0, z: 1 }, 1.2);
 
     const first = world.update(state);
     const second = world.update(state);
@@ -19,9 +19,9 @@ describe('prozeduraler LOD-Kamerafokus', () => {
     );
   });
 
-  it('behält Fokus und Parent-Auswahl bei einer reinen Zoomsequenz räumlich stabil', () => {
+  it('behält Fokus und Volltopologie bei einer reinen Zoomsequenz räumlich stabil', () => {
     const world = new ProceduralWorldLod({ seed: 'fgh', density: 'standard' });
-    const samples = [1.18, 1.19, 1.2, 1.19, 1.18].map((distance) => {
+    const samples = [1.2, 1.21, 1.22, 1.21, 1.2].map((distance) => {
       const state = camera({ x: 0, y: 0, z: 1 }, distance);
       const units = world.update(state);
       return {
@@ -43,16 +43,17 @@ describe('prozeduraler LOD-Kamerafokus', () => {
     }
   });
 
-  it('verschiebt die verfeinerten Eltern nachvollziehbar mit einer echten Rotation', () => {
+  it('verschiebt den diagnostizierten Fokus nachvollziehbar mit einer echten Rotation', () => {
     const world = new ProceduralWorldLod({ seed: 'fgh', density: 'standard' });
-    const frontState = camera({ x: 0, y: 0, z: 1 }, 1.18);
+    const frontState = camera({ x: 0, y: 0, z: 1 }, 1.2);
     const frontDiagnostics = createLodFocusDiagnostics(frontState, world.update(frontState));
 
-    const rotatedState = camera(normalize({ x: 0.65, y: 0.1, z: 0.75 }), 1.18);
+    const rotatedState = camera(normalize({ x: 0.65, y: 0.1, z: 0.75 }), 1.2);
     const rotatedDiagnostics = createLodFocusDiagnostics(rotatedState, world.update(rotatedState));
 
     expect(rotatedDiagnostics.focusDirection.x).toBeGreaterThan(frontDiagnostics.focusDirection.x);
-    expect(rotatedDiagnostics.regionalParentIds).not.toEqual(frontDiagnostics.regionalParentIds);
+    expect(rotatedDiagnostics.finestUnitKeys).toEqual(frontDiagnostics.finestUnitKeys);
+    expect(rotatedDiagnostics.finestCellCount).toBe(frontDiagnostics.finestCellCount);
     expect(rotatedDiagnostics.finestAngularDistance ?? Infinity).toBeLessThan(0.2);
   });
 });

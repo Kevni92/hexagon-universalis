@@ -15,6 +15,7 @@ import { createCellGlobeMesh } from './CellGlobe';
 import { ChunkRenderer } from './ChunkRenderer';
 import { computeLocalCameraState } from './CameraFrame';
 import { ProceduralDetailRenderer } from './ProceduralDetails';
+import { PROCEDURAL_CAMERA_RANGE } from './ProceduralCamera';
 import {
   proceduralSurfaceRadius,
   proceduralTerrainDiagnostics,
@@ -24,7 +25,6 @@ import {
 const MAX_PIXEL_RATIO = 2;
 const CAMERA = { fov: 45, near: 0.1, far: 100, z: 3.4 } as const;
 const SHOWCASE_TOPOLOGY_FREQUENCY = 2;
-const PROCEDURAL_MIN_CAMERA_DISTANCE = 1.18;
 const PROCEDURAL_LEVELS = ['global', 'regional', 'local'] as const;
 
 export type WorldMode = 'earth' | 'demo' | 'lod' | 'procedural';
@@ -134,7 +134,11 @@ export class SceneRenderer {
       this.camera,
       this.renderer.domElement,
       worldMode === 'procedural'
-        ? { minDistance: PROCEDURAL_MIN_CAMERA_DISTANCE, zoomAdaptiveRotation: true }
+        ? {
+            minDistance: PROCEDURAL_CAMERA_RANGE.minDistance,
+            maxDistance: PROCEDURAL_CAMERA_RANGE.maxDistance,
+            zoomAdaptiveRotation: true,
+          }
         : {},
     );
 
@@ -181,12 +185,13 @@ export class SceneRenderer {
   public get proceduralState(): ProceduralRendererState | null {
     if (this.proceduralWorldLod === null) return null;
     const profile = this.proceduralWorldLod.profile;
+    const lodLevel = this.activeResolutionLevel ?? 'global';
     return {
       config: this.proceduralWorldLod.config,
       fingerprint: this.proceduralWorldLod.fingerprint,
-      lodLevel: this.activeResolutionLevel ?? 'global',
-      frequency: profile.quality.levels.global.frequency,
-      cellCount: profile.levelCellCounts.global,
+      lodLevel,
+      frequency: profile.quality.levels[lodLevel].frequency,
+      cellCount: profile.levelCellCounts[lodLevel],
     };
   }
 
