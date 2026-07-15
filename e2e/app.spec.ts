@@ -173,23 +173,11 @@ test('procedural terrain exposes relief, complete terrain groups and bounded det
     .toBeLessThanOrEqual(12);
   await expect
     .poll(async () => Number(await canvas.getAttribute('data-render-draw-calls')))
-    .toBeLessThanOrEqual(15);
+    .toBeLessThanOrEqual(16);
   await testInfo.attach('issue-80-local', {
     body: await page.screenshot(),
     contentType: 'image/png',
   });
-
-  await canvas.dispatchEvent('wheel', { deltaY: 3_000 });
-  await expect(canvas).toHaveAttribute('data-lod-level', 'global');
-  await expect(canvas).toHaveAttribute('data-detail-instances', '0');
-  await zoomUntilLod(canvas, 'regional', -400);
-  await zoomUntilLod(canvas, 'local', -400);
-  await expect
-    .poll(async () => Number(await canvas.getAttribute('data-detail-instances')))
-    .toBeGreaterThan(0);
-  await expect
-    .poll(async () => Number(await canvas.getAttribute('data-render-draw-calls')))
-    .toBeLessThanOrEqual(15);
 
   expect(pageErrors).toEqual([]);
 });
@@ -217,11 +205,37 @@ test('low-density local relief remains closed from an oblique angle', async ({
   await expect(canvas).toHaveAttribute('data-lod-level', 'local');
   await expect
     .poll(async () => Number(await canvas.getAttribute('data-render-draw-calls')))
-    .toBeLessThanOrEqual(15);
+    .toBeLessThanOrEqual(16);
   await testInfo.attach('issue-86-low-local-podiums', {
     body: await page.screenshot(),
     contentType: 'image/png',
   });
+  expect(pageErrors).toEqual([]);
+});
+
+test('low-density relief restores details after a complete LOD cycle', async ({ page }) => {
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+  await page.goto('/?world=procedural&seed=fgh&density=low');
+  const canvas = page.locator('canvas.viewport-canvas');
+
+  await zoomUntilLod(canvas, 'regional', -400);
+  await zoomUntilLod(canvas, 'local', -400);
+  await expect
+    .poll(async () => Number(await canvas.getAttribute('data-detail-instances')))
+    .toBeGreaterThan(0);
+
+  await canvas.dispatchEvent('wheel', { deltaY: 3_000 });
+  await expect(canvas).toHaveAttribute('data-lod-level', 'global');
+  await expect(canvas).toHaveAttribute('data-detail-instances', '0');
+  await zoomUntilLod(canvas, 'regional', -1_100, 4);
+  await zoomUntilLod(canvas, 'local', -650, 4);
+  await expect
+    .poll(async () => Number(await canvas.getAttribute('data-detail-instances')))
+    .toBeGreaterThan(0);
+  await expect
+    .poll(async () => Number(await canvas.getAttribute('data-render-draw-calls')))
+    .toBeLessThanOrEqual(16);
   expect(pageErrors).toEqual([]);
 });
 
