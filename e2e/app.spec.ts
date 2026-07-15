@@ -192,6 +192,35 @@ test('procedural terrain exposes relief, complete terrain groups and bounded det
   expect(pageErrors).toEqual([]);
 });
 
+test('low-density local relief remains closed from an oblique angle', async ({
+  page,
+}, testInfo) => {
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+  await page.goto('/?world=procedural&seed=fgh&density=low');
+  const canvas = page.locator('canvas.viewport-canvas');
+
+  await zoomUntilLod(canvas, 'regional', -400);
+  await zoomUntilLod(canvas, 'local', -400);
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (box !== null) {
+    await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.68, box.y + box.height * 0.38, { steps: 8 });
+    await page.mouse.up();
+  }
+  await expect(canvas).toHaveAttribute('data-lod-level', 'local');
+  await expect
+    .poll(async () => Number(await canvas.getAttribute('data-render-draw-calls')))
+    .toBeLessThanOrEqual(15);
+  await testInfo.attach('issue-86-low-local-podiums', {
+    body: await page.screenshot(),
+    contentType: 'image/png',
+  });
+  expect(pageErrors).toEqual([]);
+});
+
 test('procedural controls reproduce seeds, validate density and stay inside the viewport', async ({
   page,
 }) => {
