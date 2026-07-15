@@ -45,7 +45,7 @@ export const PROCEDURAL_LOD_PROFILES: Readonly<
       levels: {
         global: level(4, Infinity, 0, 1),
         regional: level(8, 70, 50, 1),
-        local: level(16, 40, 28, 1),
+        local: level(16, 70, 52, 1),
       },
     },
     levelCellCounts: { global: 162, regional: 642, local: 2562 },
@@ -60,7 +60,7 @@ export const PROCEDURAL_LOD_PROFILES: Readonly<
       levels: {
         global: level(8, Infinity, 0, 1),
         regional: level(16, 35, 25, 1),
-        local: level(32, 30, 22, 1),
+        local: level(32, 55, 40, 1),
       },
     },
     levelCellCounts: { global: 642, regional: 2562, local: 10242 },
@@ -75,7 +75,7 @@ export const PROCEDURAL_LOD_PROFILES: Readonly<
       levels: {
         global: level(16, Infinity, 0, 1),
         regional: level(24, 18, 13, 1),
-        local: level(32, 14, 10, 1),
+        local: level(32, 28, 20, 1),
       },
     },
     levelCellCounts: { global: 2562, regional: 5762, local: 10242 },

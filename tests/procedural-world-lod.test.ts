@@ -56,7 +56,10 @@ describe('ProceduralWorldLod', () => {
     expect(regional[1]?.cells.length).toBeGreaterThan(0);
     expect(regional[1]?.cells.length).toBeLessThan(2562);
 
-    const local = world.update(camera(2.2));
+    const regionalOnly = world.update(camera(2.2));
+    expect(regionalOnly.map((unit) => unit.level)).toEqual([0, 1]);
+
+    const local = world.update(camera(1.35));
     expect(local.map((unit) => unit.level)).toEqual([0, 1, 2]);
     expect(local[2]?.cells.length).toBeGreaterThan(0);
     expect(local[2]?.cells.length).toBeLessThan(10242);

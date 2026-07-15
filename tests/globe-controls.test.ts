@@ -92,6 +92,15 @@ describe('GlobeControls', () => {
     controls.dispose();
   });
 
+  it('supports a safe close-up distance for the procedural world', () => {
+    const { camera, controls, element } = createControls({ minDistance: 1.18 });
+
+    element.dispatch('wheel', { deltaY: -1_000_000, deltaMode: 0, preventDefault: vi.fn() });
+
+    expect(camera.position.z).toBe(1.18);
+    controls.dispose();
+  });
+
   it('handles pinch distance and pointer cancellation without stuck input', () => {
     const { controls, element, world } = createControls({ inertia: false });
 

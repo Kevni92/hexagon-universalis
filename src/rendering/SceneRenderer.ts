@@ -16,6 +16,7 @@ import { computeLocalCameraState } from './CameraFrame';
 const MAX_PIXEL_RATIO = 2;
 const CAMERA = { fov: 45, near: 0.1, far: 100, z: 3.4 } as const;
 const SHOWCASE_TOPOLOGY_FREQUENCY = 2;
+const PROCEDURAL_MIN_CAMERA_DISTANCE = 1.18;
 
 export type WorldMode = 'earth' | 'demo' | 'lod' | 'procedural';
 
@@ -85,7 +86,12 @@ export class SceneRenderer {
       this.world.add(this.cellGlobe);
       this.earthRuntime = null;
     }
-    this.controls = new GlobeControls(this.world, this.camera, this.renderer.domElement);
+    this.controls = new GlobeControls(
+      this.world,
+      this.camera,
+      this.renderer.domElement,
+      worldMode === 'procedural' ? { minDistance: PROCEDURAL_MIN_CAMERA_DISTANCE } : {},
+    );
 
     if (typeof ResizeObserver !== 'undefined') {
       this.resizeObserver = new ResizeObserver(this.resize);
@@ -217,6 +223,11 @@ export class SceneRenderer {
     const canvas = this.renderer.domElement;
     if (this.proceduralWorldLod !== null)
       canvas.dataset.lodLevel = this.activeResolutionLevel ?? 'global';
+    canvas.dataset.cameraDistance = Math.hypot(
+      this.camera.position.x,
+      this.camera.position.y,
+      this.camera.position.z,
+    ).toFixed(2);
     this.requestVisibleEarthData();
   }
 

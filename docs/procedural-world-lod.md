@@ -28,9 +28,9 @@ erhöhen die geometrische Frequenz darüber hinaus. Für Frequenz `f` gilt `10 �
 
 | Dichte     |      Global |    Regional |        Lokal | Regional ein/aus | Lokal ein/aus | max. aktive Zellen | Draw Calls | Zielbudget Generierung |
 | ---------- | ----------: | ----------: | -----------: | ---------------: | ------------: | -----------------: | ---------: | ---------------------: |
-| `low`      |    f4 / 162 |    f8 / 642 |  f16 / 2.562 |       70 / 50 px |    40 / 28 px |              3.366 |          3 |                  40 ms |
-| `standard` |    f8 / 642 | f16 / 2.562 | f32 / 10.242 |       35 / 25 px |    30 / 22 px |             13.446 |          3 |                  90 ms |
-| `high`     | f16 / 2.562 | f24 / 5.762 | f32 / 10.242 |       18 / 13 px |    14 / 10 px |             18.566 |          3 |                 180 ms |
+| `low`      |    f4 / 162 |    f8 / 642 |  f16 / 2.562 |       70 / 50 px |    70 / 52 px |              3.366 |          3 |                  40 ms |
+| `standard` |    f8 / 642 | f16 / 2.562 | f32 / 10.242 |       35 / 25 px |    55 / 40 px |             13.446 |          3 |                  90 ms |
+| `high`     | f16 / 2.562 | f24 / 5.762 | f32 / 10.242 |       18 / 13 px |    28 / 20 px |             18.566 |          3 |                 180 ms |
 
 Die Werte vor und nach dem Schrägstrich sind Einschalt- und Ausschaltschwelle der Hysterese.
 Global bleibt resident. Regional und Lokal werden erst beim Erreichen ihrer Schwelle erzeugt und
@@ -39,6 +39,11 @@ deshalb sind höchstens drei Draw Calls nötig. `max. aktive Zellen` ist die kon
 vollständigen Stufen; die tatsächliche Zahl liegt durch die Sichtfeldselektion darunter. Das
 Mobilprofil entspricht der `low`-Dichte und verändert keine Generatorparameter oder fachlichen
 Werte.
+
+Nur der prozedurale Modus reduziert die minimale Kameradistanz von `2.2` auf `1.18`. Damit liegt
+zwischen dem Regionalwechsel bei mittlerer Entfernung und dem Lokalwechsel im echten Nahbereich
+ein deutlich größerer nutzbarer Zoombereich. Die Nahgrenze hält trotz des radial um 0,6 Prozent
+angehobenen Lokal-Overlays weiterhin Abstand zur Near-Clipping-Ebene.
 
 Ungültige Seeds, Dichten und Generatorparameter werden vor der Welt- oder
 Topologiematerialisierung abgelehnt. Ein Seed-/Parameterwechsel leert nur den fachlichen

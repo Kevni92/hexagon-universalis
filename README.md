@@ -40,7 +40,7 @@ Der reale Erdmodus bleibt davon unverändert.
 Testwelt. Sie verwendet denselben Seed und dieselben Generatorparameter in den benannten Stufen
 Global, Regional und Lokal. Beim Zoomen bleiben ferne Regionen global, während sichtbare
 Regional- und Lokalzellen als lückenlose, feinere Overlays materialisiert werden. Dichteprofile,
-Zellzahlen, Hystereseschwellen und Budgets sind in
+Zellzahlen, die deutlich erweiterte Nahzoomgrenze, Hystereseschwellen und Budgets sind in
 [docs/procedural-world-lod.md](./docs/procedural-world-lod.md) dokumentiert. Das bestehende
 `?world=lod` bleibt als reine Geometrie-Diagnose verfügbar.
 

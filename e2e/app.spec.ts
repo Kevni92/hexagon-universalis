@@ -93,8 +93,14 @@ test('procedural world reaches Global, Regional and Lokal without console errors
   await canvas.hover();
   await page.mouse.wheel(0, -400);
   await expect(canvas).toHaveAttribute('data-lod-level', 'regional');
-  await page.mouse.wheel(0, -1_000);
-  await expect(canvas).toHaveAttribute('data-lod-level', 'local');
+  await expect
+    .poll(async () => Number(await canvas.getAttribute('data-camera-distance')))
+    .toBeGreaterThan(2);
+  await page.mouse.wheel(0, -650);
+  await expect(canvas).toHaveAttribute('data-lod-level', 'local', { timeout: 15_000 });
+  await expect
+    .poll(async () => Number(await canvas.getAttribute('data-camera-distance')))
+    .toBeLessThan(1.5);
   await page.mouse.wheel(0, 3_000);
   await expect(canvas).toHaveAttribute('data-lod-level', 'global');
 
