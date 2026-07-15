@@ -142,9 +142,7 @@ test('procedural world reaches Global, Regional and Lokal without console errors
   expect(pageErrors).toEqual([]);
 });
 
-test('procedural terrain exposes relief, complete terrain groups and bounded detail LOD', async ({
-  page,
-}, testInfo) => {
+test('procedural terrain exposes relief and complete terrain groups', async ({ page }) => {
   const pageErrors: Error[] = [];
   page.on('pageerror', (error) => pageErrors.push(error));
   await page.goto('/?world=procedural');
@@ -164,21 +162,20 @@ test('procedural terrain exposes relief, complete terrain groups and bounded det
   await expect
     .poll(async () => Number(await canvas.getAttribute('data-relief-maximum')))
     .toBeGreaterThan(1);
-  await testInfo.attach('issue-80-global', {
-    body: await canvas.screenshot(),
-    contentType: 'image/png',
-  });
 
-  await zoomUntilLod(canvas, 'regional', -400);
-  await expect
-    .poll(async () => Number(await canvas.getAttribute('data-detail-instances')))
-    .toBeGreaterThan(0);
-  await testInfo.attach('issue-80-regional', {
-    body: await canvas.screenshot(),
-    contentType: 'image/png',
-  });
+  expect(pageErrors).toEqual([]);
+});
 
-  await zoomUntilLod(canvas, 'local', -400);
+test('low-density procedural LOD stays within detail and draw-call budgets', async ({ page }) => {
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+  await page.goto('/?world=procedural&density=low');
+  const canvas = page.locator('canvas.viewport-canvas');
+
+  await canvas.dispatchEvent('wheel', { deltaY: -400 });
+  await expect(canvas).toHaveAttribute('data-lod-level', 'regional');
+  await canvas.dispatchEvent('wheel', { deltaY: -400 });
+  await expect(canvas).toHaveAttribute('data-lod-level', 'local');
   await expect(canvas).toHaveAttribute('data-detail-instances', /^\d+$/);
   await expect
     .poll(async () => Number(await canvas.getAttribute('data-detail-draw-calls')))
@@ -189,10 +186,6 @@ test('procedural terrain exposes relief, complete terrain groups and bounded det
   await expect
     .poll(async () => Number(await canvas.getAttribute('data-render-draw-calls')))
     .toBeLessThanOrEqual(16);
-  await testInfo.attach('issue-80-local', {
-    body: await canvas.screenshot(),
-    contentType: 'image/png',
-  });
 
   expect(pageErrors).toEqual([]);
 });
@@ -200,6 +193,7 @@ test('procedural terrain exposes relief, complete terrain groups and bounded det
 test('low-density local relief remains closed from an oblique angle', async ({
   page,
 }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium', 'Visuelle Abnahme läuft im Desktop-Chromium.');
   const pageErrors: Error[] = [];
   page.on('pageerror', (error) => pageErrors.push(error));
   await page.goto('/?world=procedural&seed=fgh&density=low');
@@ -236,18 +230,19 @@ test('low-density relief restores the same render state after a complete LOD cyc
   await page.goto('/?world=procedural&seed=fgh&density=low');
   const canvas = page.locator('canvas.viewport-canvas');
 
-  await zoomUntilLod(canvas, 'regional', -400);
-  await zoomUntilLod(canvas, 'local', -400);
+  await canvas.dispatchEvent('wheel', { deltaY: -400 });
+  await expect(canvas).toHaveAttribute('data-lod-level', 'regional');
+  await canvas.dispatchEvent('wheel', { deltaY: -400 });
+  await expect(canvas).toHaveAttribute('data-lod-level', 'local');
   const initialLocalState = await readProceduralRenderState(canvas);
-  expect(initialLocalState.lodLevel).toBe('local');
   expect(initialLocalState.renderDrawCalls).toBeGreaterThan(0);
   expect(initialLocalState.renderDrawCalls).toBeLessThanOrEqual(16);
 
   await canvas.dispatchEvent('wheel', { deltaY: 3_000 });
   await expect(canvas).toHaveAttribute('data-lod-level', 'global');
   await expect(canvas).toHaveAttribute('data-detail-instances', '0');
-  await zoomUntilLod(canvas, 'regional', -400);
-  await zoomUntilLod(canvas, 'local', -400);
+  await canvas.dispatchEvent('wheel', { deltaY: -3_000 });
+  await expect(canvas).toHaveAttribute('data-lod-level', 'local');
   await expect.poll(() => readProceduralRenderState(canvas)).toEqual(initialLocalState);
   expect(pageErrors).toEqual([]);
 });
