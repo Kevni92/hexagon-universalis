@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { visibleCellId } from '@/topology/lod/WorldLod';
+import { visibleCellId, type VisibleUnit } from '@/topology/lod/WorldLod';
 import { estimateCellRadius } from '@/topology/lod/hierarchy';
 import type { CameraState } from '@/topology/lod/selection';
 import { PROCEDURAL_LOD_PROFILES, ProceduralWorldLod } from '@/world/proceduralWorldLod';
@@ -43,7 +43,10 @@ describe('ProceduralWorldLod', () => {
   });
 
   it('erreicht mit denselben Generatorparametern alle drei benannten Weltstufen', () => {
-    const world = new ProceduralWorldLod({ seed: 'lod-reference', density: 'standard' });
+    const world = new ProceduralWorldLod({
+      seed: 'lod-reference',
+      density: 'standard',
+    });
 
     const global = world.update(camera(10));
     expect(new Set(global.map((unit) => unit.level))).toEqual(new Set([0]));
@@ -51,31 +54,64 @@ describe('ProceduralWorldLod', () => {
     expect(global[0]?.cells).toHaveLength(642);
 
     const regional = world.update(camera(2.8));
-    expect(regional.map((unit) => unit.level)).toEqual([0, 1]);
-    expect(regional[0]?.cells).toHaveLength(642);
-    expect(regional[1]?.cells.length).toBeGreaterThan(0);
-    expect(regional[1]?.cells.length).toBeLessThan(2562);
+    expect(new Set(regional.map((unit) => unit.level))).toEqual(new Set([0, 1]));
+    expect(cellsAtLevel(regional, 0).length).toBeLessThan(642);
+    expect(cellsAtLevel(regional, 1).length).toBeGreaterThan(0);
+    expect(cellsAtLevel(regional, 1).length).toBeLessThan(2562);
 
     const regionalOnly = world.update(camera(2.2));
-    expect(regionalOnly.map((unit) => unit.level)).toEqual([0, 1]);
+    expect(new Set(regionalOnly.map((unit) => unit.level))).toEqual(new Set([0, 1]));
 
-    const local = world.update(camera(1.35));
-    expect(local.map((unit) => unit.level)).toEqual([0, 1, 2]);
-    expect(local[2]?.cells.length).toBeGreaterThan(0);
-    expect(local[2]?.cells.length).toBeLessThan(10242);
-    const meanRadius = (unit: (typeof local)[number]): number =>
-      unit.cells.reduce((sum, cell) => sum + estimateCellRadius(cell.cell), 0) / unit.cells.length;
-    expect(meanRadius(regional[1]!)).toBeLessThan(meanRadius(global[0]!));
-    expect(meanRadius(local[2]!)).toBeLessThan(meanRadius(regional[1]!));
+    const local = world.update(camera(1.18));
+    expect(new Set(local.map((unit) => unit.level))).toEqual(new Set([0, 1, 2]));
+    expect(cellsAtLevel(local, 2).length).toBeGreaterThan(0);
+    expect(cellsAtLevel(local, 2).length).toBeLessThan(10242);
+    expect(meanRadius(regional, 1)).toBeLessThan(meanRadius(global, 0));
+    expect(meanRadius(local, 2)).toBeLessThan(meanRadius(local, 1));
     expect(world.config.seed).toBe('lod-reference');
     expect(world.fingerprint).toMatch(/^pw1-[0-9a-f]{8}$/);
   });
 
+  it('ersetzt Elternflächen hierarchisch statt Global-, Regional- und Lokalflächen zu überlagern', () => {
+    const world = new ProceduralWorldLod({
+      seed: 'exclusive-lod',
+      density: 'standard',
+    });
+    const units = world.update(camera(1.18));
+    const globalIndices = new Set(cellsAtLevel(units, 0).map((cell) => cell.id.index));
+
+    for (const regionalCell of cellsAtLevel(units, 1)) {
+      if (regionalCell.parentIndex !== null)
+        expect(globalIndices.has(regionalCell.parentIndex)).toBe(false);
+    }
+
+    for (const localUnit of units.filter((unit) => unit.level === 2)) {
+      const match = /\/g(\d+)\/p(\d+)$/.exec(localUnit.key);
+      expect(match).not.toBeNull();
+      const globalParent = Number.parseInt(match?.[1] ?? '-1', 10);
+      const regionalParent = Number.parseInt(match?.[2] ?? '-1', 10);
+      expect(globalIndices.has(globalParent)).toBe(false);
+      expect(
+        cellsAtLevel(units, 1).some(
+          (cell) => cell.parentIndex === globalParent && cell.id.index === regionalParent,
+        ),
+      ).toBe(false);
+    }
+  });
+
   it('liefert für dieselben räumlichen Referenzproben stufenübergreifend identische Fachwerte', () => {
-    const world = new ProceduralWorldLod({ seed: 'shared-position', density: 'standard' });
+    const world = new ProceduralWorldLod({
+      seed: 'shared-position',
+      density: 'standard',
+    });
     const seen = new Map<
       string,
-      { elevation: number; surface: string; temperature: number; moisture: number }
+      {
+        elevation: number;
+        surface: string;
+        temperature: number;
+        moisture: number;
+      }
     >();
     let sharedSamples = 0;
 
@@ -106,15 +142,15 @@ describe('ProceduralWorldLod', () => {
 
   it('verwendet voll qualifizierte lokale IDs ohne doppelt sichtbare Picking-Flächen', () => {
     const world = new ProceduralWorldLod({ density: 'standard' });
-    const units = world.update(camera(2.2));
+    const units = world.update(camera(1.18));
     const ids = units.flatMap((unit) =>
       unit.cells.map((_cell, index) => visibleCellId(unit, index)),
     );
 
     expect(new Set(ids).size).toBe(ids.length);
-    expect(
-      ids.filter((id) => id.startsWith('lvl2-local/')).every((id) => /\/visible\/c\d+$/.test(id)),
-    ).toBe(true);
+    expect(ids.filter((id) => id.startsWith('lvl2-local/')).every((id) => /\/c\d+$/.test(id))).toBe(
+      true,
+    );
   });
 
   it('invalidiert bei Seedwechsel nur Fachprojektionen und bei Dichtewechsel auch die Topologie', () => {
@@ -139,7 +175,10 @@ describe('ProceduralWorldLod', () => {
   });
 
   it('behält bei einer ungültigen Neukonfiguration die bisherige gültige Welt atomar bei', () => {
-    const world = new ProceduralWorldLod({ seed: 'valid-world', density: 'standard' });
+    const world = new ProceduralWorldLod({
+      seed: 'valid-world',
+      density: 'standard',
+    });
     const fingerprint = world.fingerprint;
 
     expect(() => world.reconfigure({ seed: '' })).toThrow(/Seed/);
@@ -169,3 +208,12 @@ describe('ProceduralWorldLod', () => {
     expect(() => world.update(camera(10))).toThrow(/disposed/);
   });
 });
+
+function cellsAtLevel(units: readonly VisibleUnit[], level: 0 | 1 | 2) {
+  return units.filter((unit) => unit.level === level).flatMap((unit) => unit.cells);
+}
+
+function meanRadius(units: readonly VisibleUnit[], level: 0 | 1 | 2): number {
+  const cells = cellsAtLevel(units, level);
+  return cells.reduce((sum, cell) => sum + estimateCellRadius(cell.cell), 0) / cells.length;
+}

@@ -39,7 +39,7 @@ Der reale Erdmodus bleibt davon unverändert.
 `?world=procedural` öffnet eine eindeutig als künstlich gekennzeichnete, deterministische
 Testwelt. Sie verwendet denselben Seed und dieselben Generatorparameter in den benannten Stufen
 Global, Regional und Lokal. Beim Zoomen bleiben ferne Regionen global, während sichtbare
-Regional- und Lokalzellen als lückenlose, feinere Overlays materialisiert werden. Dichteprofile,
+Regional- und Lokalzellen ihre gröberen Eltern hierarchisch ersetzen. Dichteprofile,
 Zellzahlen, die deutlich erweiterte Nahzoomgrenze, Hystereseschwellen und Budgets sind in
 [docs/procedural-world-lod.md](./docs/procedural-world-lod.md) dokumentiert. Das bestehende
 `?world=lod` bleibt als reine Geometrie-Diagnose verfügbar.
@@ -50,10 +50,11 @@ sichtbar; erfolgreiche Konfigurationen werden für reproduzierbare Reloads in di
 Seedformat, Profilwerte, Statusmodell und responsives Verhalten beschreibt
 [docs/procedural-world-controls.md](./docs/procedural-world-controls.md).
 
-Kontinente, Ozeane, Küsten und alle Reliefbänder werden als echtes Geometrierelief dargestellt.
-Regional und lokal ergänzen deterministische, nach Detailtyp gebündelte Instanzen sowie
-nachbarschaftsbasierte Übergänge; global entstehen keine Einzelobjekte. Farbableitung,
-Reliefprofil, Picking-, Ressourcen- und Draw-Call-Budgets sind in
+Kontinente, Ozeane, Küsten und alle Reliefbänder werden als geschlossenes Geometrierelief mit
+Deckflächen, Podestseiten und innerem Planetenkörper dargestellt. Regional und lokal ergänzen
+deterministische, nach Detailtyp gebündelte Instanzen sowie nachbarschaftsbasierte Übergänge;
+global entstehen keine Einzelobjekte. Farbableitung, Reliefprofil, Picking-, Ressourcen- und
+Draw-Call-Budgets sind in
 [docs/procedural-terrain-rendering.md](./docs/procedural-terrain-rendering.md) dokumentiert.
 
 ## Produktionsbuild

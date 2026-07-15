@@ -1,10 +1,6 @@
 import { TILE_PROFILES, type TileModifier, type TileType } from '@/data/tileCatalog';
 import type { Vector3 } from '@/topology/geodesic';
-import {
-  SelectiveOverlayWorldLodController,
-  visibleCellId,
-  type VisibleUnit,
-} from '@/topology/lod/WorldLod';
+import { visibleCellId, type VisibleUnit } from '@/topology/lod/WorldLod';
 import type { QualityProfile } from '@/topology/lod/profiles';
 import type { CameraState } from '@/topology/lod/selection';
 import {
@@ -16,6 +12,7 @@ import {
   type ProceduralWorldCell,
   type ProceduralWorldConfig,
 } from './proceduralWorld';
+import { ProceduralWorldLodController } from './proceduralWorldLodController';
 
 export type ProceduralWorldLodLevel = 'global' | 'regional' | 'local';
 export type ProceduralCellColor = (cell: ProceduralWorldCell) => string;
@@ -115,7 +112,7 @@ export interface ProceduralLodCacheStats {
 export class ProceduralWorldLod {
   private configValue: ProceduralWorldConfig;
   private referenceWorld: ProceduralWorld;
-  private controller: SelectiveOverlayWorldLodController;
+  private controller: ProceduralWorldLodController;
   private readonly projectedById = new Map<string, ProceduralLodCell>();
   private readonly colorsById = new Map<string, string>();
   private generation = 1;
@@ -127,7 +124,7 @@ export class ProceduralWorldLod {
   ) {
     this.configValue = normalizeProceduralWorldConfig(config);
     this.referenceWorld = createProceduralWorld(this.configValue);
-    this.controller = new SelectiveOverlayWorldLodController(this.profile.quality);
+    this.controller = new ProceduralWorldLodController(this.profile.quality);
   }
 
   public get config(): ProceduralWorldConfig {
@@ -151,7 +148,10 @@ export class ProceduralWorldLod {
   }
 
   public get cacheStats(): ProceduralLodCacheStats {
-    return { projectedCells: this.projectedById.size, generation: this.generation };
+    return {
+      projectedCells: this.projectedById.size,
+      generation: this.generation,
+    };
   }
 
   public update(camera: CameraState): readonly VisibleUnit[] {
@@ -199,7 +199,10 @@ export class ProceduralWorldLod {
    */
   public reconfigure(config: Partial<ProceduralWorldConfig>): void {
     this.assertActive();
-    const next = normalizeProceduralWorldConfig({ ...this.configValue, ...config });
+    const next = normalizeProceduralWorldConfig({
+      ...this.configValue,
+      ...config,
+    });
     if (JSON.stringify(next) === JSON.stringify(this.configValue)) return;
     const densityChanged = next.density !== this.configValue.density;
     const nextReferenceWorld = createProceduralWorld(next);
@@ -208,8 +211,7 @@ export class ProceduralWorldLod {
     this.projectedById.clear();
     this.colorsById.clear();
     this.generation += 1;
-    if (densityChanged)
-      this.controller = new SelectiveOverlayWorldLodController(this.profile.quality);
+    if (densityChanged) this.controller = new ProceduralWorldLodController(this.profile.quality);
   }
 
   public dispose(): void {

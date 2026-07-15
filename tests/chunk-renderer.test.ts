@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 
 import { ChunkRenderer } from '@/rendering/ChunkRenderer';
@@ -35,7 +36,7 @@ describe('ChunkRenderer', () => {
     expect(renderer.activeCellIds.size).toBe(2);
   });
 
-  it('applies relief radii per stable picking cell without adding draw calls', () => {
+  it('applies relief podiums with one fixed substrate draw call instead of per-cell meshes', () => {
     const units = unitsFromPatchCells(2);
     const liftedCellId = units[0]?.cells[0]?.formattedId;
     if (liftedCellId === undefined) throw new Error('missing lifted cell');
@@ -45,23 +46,104 @@ describe('ChunkRenderer', () => {
 
     renderer.update(units);
 
-    expect(renderer.activeChunkCount).toBe(2);
+    expect(renderer.activeChunkCount).toBe(3);
+    expect(renderer.activeSubstrateDrawCallCount).toBe(1);
     expect(renderer.activeCellIds).toEqual(
       new Set(units.map((unit) => unit.cells[0]!.formattedId)),
     );
+    expect(renderer.activeSideTriangleCount).toBeGreaterThan(0);
     const radiiByMesh = new Map(
       renderer.meshes.map((mesh) => {
         const positions = mesh.geometry.getAttribute('position');
-        const radii = Array.from({ length: positions.count }, (_, index) =>
+        const topVertexCount = Number(mesh.userData.topTriangleCount) * 3;
+        const topRadii = Array.from({ length: topVertexCount }, (_, index) =>
           Math.hypot(positions.getX(index), positions.getY(index), positions.getZ(index)),
         );
-        return [mesh.name, { minimum: Math.min(...radii), maximum: Math.max(...radii) }] as const;
+        const allRadii = Array.from({ length: positions.count }, (_, index) =>
+          Math.hypot(positions.getX(index), positions.getY(index), positions.getZ(index)),
+        );
+        return [
+          mesh.name,
+          {
+            topMinimum: Math.min(...topRadii),
+            topMaximum: Math.max(...topRadii),
+            minimum: Math.min(...allRadii),
+          },
+        ] as const;
       }),
     );
-    expect(radiiByMesh.get('unit-0')?.minimum).toBeCloseTo(1.08, 6);
-    expect(radiiByMesh.get('unit-0')?.maximum).toBeCloseTo(1.08, 6);
-    expect(radiiByMesh.get('unit-1')?.minimum).toBeCloseTo(0.98, 6);
-    expect(radiiByMesh.get('unit-1')?.maximum).toBeCloseTo(0.98, 6);
+    expect(radiiByMesh.get('unit-0')?.topMinimum).toBeCloseTo(1.08, 6);
+    expect(radiiByMesh.get('unit-0')?.topMaximum).toBeCloseTo(1.08, 6);
+    expect(radiiByMesh.get('unit-1')?.topMinimum).toBeCloseTo(0.98, 6);
+    expect(radiiByMesh.get('unit-1')?.topMaximum).toBeCloseTo(0.98, 6);
+    expect(radiiByMesh.get('unit-0')?.minimum).toBeCloseTo(0.975, 6);
+    expect(radiiByMesh.get('unit-1')?.minimum).toBeCloseTo(0.975, 6);
+  });
+
+  it('keeps local relief vertices radially bounded and adds two side faces per edge', () => {
+    const cell = createGlobalPatch(4).cells[0];
+    if (cell === undefined) throw new Error('missing local cell');
+    const cellId = 'lvl2-local/g0/p0/c0';
+    const unit: VisibleUnit = {
+      key: 'lvl2-local/g0/p0',
+      level: 2,
+      cells: [cell],
+      cellIds: [cellId],
+    };
+    const renderer = new ChunkRenderer(1, new Map([[cellId, '#809060']]), () => 1.08);
+
+    renderer.update([unit]);
+
+    const mesh = renderer.meshes[0];
+    if (mesh === undefined) throw new Error('missing local mesh');
+    const positions = mesh.geometry.getAttribute('position');
+    const radii = Array.from({ length: positions.count }, (_, index) =>
+      Math.hypot(positions.getX(index), positions.getY(index), positions.getZ(index)),
+    );
+    expect(Math.max(...radii)).toBeLessThanOrEqual(1.080001);
+    expect(Math.min(...radii)).toBeCloseTo(0.975, 6);
+    expect(mesh.userData.topTriangleCount).toBe(cell.cell.boundary.length);
+    expect(mesh.userData.sideTriangleCount).toBe(cell.cell.boundary.length * 2);
+    expect(mesh.userData.triangleCount).toBe(cell.cell.boundary.length * 3);
+    expect(new Set(mesh.userData.cellIds as readonly string[])).toEqual(new Set([cellId]));
+    expect(renderer.activeChunkCount).toBe(2);
+  });
+
+  it('covers podium seams with a non-pickable substrate below the shared base radius', () => {
+    const renderer = new ChunkRenderer(1, undefined, () => 1.04);
+    renderer.update(unitsFromPatchCells(1));
+    const substrate = renderer.group.children.find(
+      (child): child is THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial> =>
+        child instanceof THREE.Mesh && child.name === 'procedural-planet-substrate',
+    );
+    expect(substrate).toBeDefined();
+    if (substrate === undefined) throw new Error('missing substrate');
+
+    const positions = substrate.geometry.getAttribute('position');
+    for (let index = 0; index < positions.count; index += 1)
+      expect(
+        Math.hypot(positions.getX(index), positions.getY(index), positions.getZ(index)),
+      ).toBeCloseTo(0.974, 5);
+    expect(substrate.material.color.getHex()).toBe(0x496a7a);
+    const intersections: THREE.Intersection[] = [];
+    substrate.raycast(new THREE.Raycaster(), intersections);
+    expect(intersections).toEqual([]);
+
+    let disposedGeometry = false;
+    let disposedMaterial = false;
+    const originalGeometryDispose = substrate.geometry.dispose.bind(substrate.geometry);
+    substrate.geometry.dispose = () => {
+      disposedGeometry = true;
+      originalGeometryDispose();
+    };
+    const originalMaterialDispose = substrate.material.dispose.bind(substrate.material);
+    substrate.material.dispose = () => {
+      disposedMaterial = true;
+      originalMaterialDispose();
+    };
+    renderer.dispose();
+    expect(disposedGeometry).toBe(true);
+    expect(disposedMaterial).toBe(true);
   });
 
   it('differentially adds and removes chunks without rebuilding unchanged ones', () => {
@@ -91,7 +173,11 @@ describe('ChunkRenderer', () => {
     const patch = createGlobalPatch(8);
     const visibleSubset = patch.cells.slice(0, 6);
     renderer.update(
-      visibleSubset.map((cell, index) => ({ key: `k${index}`, level: 0 as const, cells: [cell] })),
+      visibleSubset.map((cell, index) => ({
+        key: `k${index}`,
+        level: 0 as const,
+        cells: [cell],
+      })),
     );
     expect(renderer.activeChunkCount).toBe(6);
     expect(renderer.activeChunkCount).toBeLessThan(patch.cells.length);
