@@ -9,7 +9,6 @@ export type ChunkSurfaceRadius = (position: Vector3, level: 0 | 1 | 2, cellId: s
 export const LOD_TRANSITION_DURATION_SECONDS = 0.18;
 
 const PODIUM_BASE_RADIUS_FACTOR = 0.975;
-const PODIUM_INSET_BY_LEVEL = [0.99, 0.97, 0.94] as const;
 const SUBSTRATE_RADIUS_FACTOR = 0.974;
 const SUBSTRATE_DETAIL = 4;
 
@@ -226,7 +225,6 @@ export class ChunkRenderer {
         ? undefined
         : {
             baseRadius: this.radius * PODIUM_BASE_RADIUS_FACTOR,
-            topInset: PODIUM_INSET_BY_LEVEL[unit.level],
             sideColorFactor: 0.76,
           };
     const data = createCellGlobeGeometryData(

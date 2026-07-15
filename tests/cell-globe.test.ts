@@ -64,7 +64,7 @@ describe('createCellGlobeGeometryData', () => {
     expect(data.cellIds).toContain(selected.id);
   });
 
-  it('builds inset podium tops with two closed side triangles per cell edge', () => {
+  it('builds flush podium tops with two closed side triangles per cell edge', () => {
     const source = createGeodesicTopology(1);
     const selected = source.cells[0];
     if (selected === undefined) throw new Error('missing cell');
@@ -81,7 +81,7 @@ describe('createCellGlobeGeometryData', () => {
       new Map([[selected.id, '#80a060']]),
       'spherical',
       () => topRadius,
-      { baseRadius, topInset: 0.9 },
+      { baseRadius },
     );
     const edgeCount = selected.boundary.length;
 
@@ -100,8 +100,9 @@ describe('createCellGlobeGeometryData', () => {
       expect(length(position)).toBeCloseTo(topRadius, 6);
       topDots.push(dot(normalize(position), selected.center));
     }
-    expect(Math.min(...topDots)).toBeGreaterThan(
+    expect(Math.min(...topDots)).toBeCloseTo(
       Math.min(...selected.boundary.map((point) => dot(point, selected.center))),
+      6,
     );
 
     for (let triangle = data.topTriangleCount; triangle < data.triangleCount; triangle += 1) {
@@ -145,8 +146,7 @@ describe('createCellGlobeGeometryData', () => {
     ).toThrow(/Podestbasis/);
     expect(() =>
       createCellGlobeGeometryData(topology, 1, undefined, 'spherical', () => 1.02, {
-        baseRadius: 0.98,
-        topInset: 0,
+        baseRadius: 0,
       }),
     ).toThrow(RangeError);
     expect(() =>
@@ -154,6 +154,54 @@ describe('createCellGlobeGeometryData', () => {
         baseRadius: 0.98,
       }),
     ).toThrow(/sphärische/);
+  });
+
+  it('uses identical top-edge vertices for shared geodesic cell boundaries', () => {
+    const topology = createGeodesicTopology(2);
+    const topRadius = 1.08;
+    const data = createCellGlobeGeometryData(topology, 1, undefined, 'spherical', () => topRadius, {
+      baseRadius: 0.975,
+    });
+    const topVerticesByCell = new Map<string, { x: number; y: number; z: number }[]>();
+    const topTriangleCountByCell = new Map<string, number>();
+
+    for (const [triangleIndex, cellId] of data.cellIds.entries()) {
+      const triangleCount = topTriangleCountByCell.get(cellId) ?? 0;
+      const cell = topology.cellsById.get(cellId);
+      if (cell === undefined) throw new Error(`missing cell ${cellId}`);
+      if (triangleCount >= cell.boundary.length) continue;
+      const vertices = topVerticesByCell.get(cellId) ?? [];
+      for (let vertexIndex = 0; vertexIndex < 3; vertexIndex += 1)
+        vertices.push(vectorAt(data.positions, triangleIndex * 9 + vertexIndex * 3));
+      topVerticesByCell.set(cellId, vertices);
+      topTriangleCountByCell.set(cellId, triangleCount + 1);
+    }
+
+    const tolerance = 1e-9;
+    for (const cell of topology.cells) {
+      for (const neighborId of cell.neighborIds) {
+        if (cell.id >= neighborId) continue;
+        const neighbor = topology.cellsById.get(neighborId);
+        if (neighbor === undefined) throw new Error(`missing neighbor ${neighborId}`);
+        const sharedBoundary = cell.boundary.filter((point) =>
+          neighbor.boundary.some((candidate) => distance(point, candidate) <= tolerance),
+        );
+        expect(sharedBoundary.length).toBeGreaterThanOrEqual(2);
+        for (const point of sharedBoundary) {
+          const expected = scaleVector(normalize(point), topRadius);
+          expect(
+            topVerticesByCell
+              .get(cell.id)
+              ?.some((candidate) => distance(candidate, expected) <= tolerance),
+          ).toBe(true);
+          expect(
+            topVerticesByCell
+              .get(neighbor.id)
+              ?.some((candidate) => distance(candidate, expected) <= tolerance),
+          ).toBe(true);
+        }
+      }
+    }
   });
 });
 
@@ -183,6 +231,20 @@ function normalize(vector: { readonly x: number; readonly y: number; readonly z:
 
 function length(vector: { readonly x: number; readonly y: number; readonly z: number }): number {
   return Math.hypot(vector.x, vector.y, vector.z);
+}
+
+function scaleVector(
+  vector: { readonly x: number; readonly y: number; readonly z: number },
+  factor: number,
+) {
+  return { x: vector.x * factor, y: vector.y * factor, z: vector.z * factor };
+}
+
+function distance(
+  first: { readonly x: number; readonly y: number; readonly z: number },
+  second: { readonly x: number; readonly y: number; readonly z: number },
+): number {
+  return Math.hypot(first.x - second.x, first.y - second.y, first.z - second.z);
 }
 
 function dot(

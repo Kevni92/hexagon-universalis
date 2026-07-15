@@ -19,13 +19,11 @@ export type CellSurfaceRadius = (position: Vector3, cellId: string) => number;
 
 export interface CellPodiumOptions {
   readonly baseRadius: number;
-  readonly topInset?: number;
   readonly sideColorFactor?: number;
 }
 
 interface ResolvedCellPodiumOptions {
   readonly baseRadius: number;
-  readonly topInset: number;
   readonly sideColorFactor: number;
 }
 
@@ -80,12 +78,7 @@ export function createCellGlobeGeometryData(
     );
     const topBoundary = cell.boundary.map((boundary) =>
       surfaceVertex(
-        insetSurfacePoint(
-          surfacePoint(boundary, cell.center, surfaceMode),
-          cell.center,
-          surfaceMode,
-          podium?.topInset ?? 1,
-        ),
+        surfacePoint(boundary, cell.center, surfaceMode),
         cell.id,
         radius,
         surfaceRadius,
@@ -212,17 +205,6 @@ function surfacePoint(boundary: Vector3, center: Vector3, surfaceMode: CellSurfa
   };
 }
 
-function insetSurfacePoint(
-  point: Vector3,
-  center: Vector3,
-  surfaceMode: CellSurfaceMode,
-  inset: number,
-): Vector3 {
-  if (inset === 1) return point;
-  const value = add(scale(center, 1 - inset), scale(point, inset));
-  return surfaceMode === 'spherical' ? normalize(value) : value;
-}
-
 function surfaceVertex(
   point: Vector3,
   cellId: string,
@@ -250,15 +232,12 @@ function resolvedRadius(
 
 function resolvePodiumOptions(options?: CellPodiumOptions): ResolvedCellPodiumOptions | undefined {
   if (options === undefined) return undefined;
-  const topInset = options.topInset ?? 0.96;
   const sideColorFactor = options.sideColorFactor ?? 0.62;
   if (!Number.isFinite(options.baseRadius) || options.baseRadius <= 0)
     throw new RangeError('Podestbasis muss größer als 0 sein.');
-  if (!Number.isFinite(topInset) || topInset <= 0 || topInset > 1)
-    throw new RangeError('Podest-Inset muss größer als 0 und höchstens 1 sein.');
   if (!Number.isFinite(sideColorFactor) || sideColorFactor <= 0 || sideColorFactor > 1)
     throw new RangeError('Seitenfarbfaktor muss größer als 0 und höchstens 1 sein.');
-  return { baseRadius: options.baseRadius, topInset, sideColorFactor };
+  return { baseRadius: options.baseRadius, sideColorFactor };
 }
 
 function edgeOutwardNormal(center: Vector3, first: Vector3, second: Vector3): Vector3 {

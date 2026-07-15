@@ -36,7 +36,7 @@ Die Abbildung ist monoton: Tiefsee liegt stets unter Flachwasser, Flachland unte
 Bei aktivem Relief wird jede Hexagon- oder Pentagonzelle innerhalb der bestehenden Chunk-Geometrie als geschlossenes Podest erzeugt:
 
 - Die Deckfläche bleibt sphärisch radial begrenzt. Die frühere tangentiale Lokalprojektion wird für Relief nicht mehr verwendet, weil sie am Kugelrand überlange Polygonsplitter erzeugen konnte.
-- Die Deckkontur wird je LOD leicht nach innen versetzt: Global `0,99`, Regional `0,97`, Lokal `0,94` der ursprünglichen Zellkontur.
+- Die Deckkontur verwendet exakt die geodätische Zellgrenze; benachbarte Zellen teilen dadurch dieselben Deckkanten ohne dekorative Fugen.
 - Für jede Polygonkante entstehen zwei Seiten-Dreiecke bis zum gemeinsamen Basissradius `0,975`.
 - Die Seitenfarbe ist eine aufgehellte, aber weiterhin abgedunkelte Ableitung der Tile-Farbe und benötigt kein zusätzliches Material.
 - Direkt unter dem Podestfuß liegt ein gemeinsamer, nicht auswählbarer Planetenkörper mit Radius `0,974`. Er füllt Restspalten an hierarchischen LOD-Nähten, sodass dort niemals der schwarze Szenenhintergrund sichtbar wird.
