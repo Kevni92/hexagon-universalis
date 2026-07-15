@@ -338,4 +338,36 @@ describe('SceneRenderer', () => {
     expect(renderer.activeResolutionLevel).toBe('global');
     renderer.dispose();
   });
+
+  it('regeneriert nur die aktive prozedurale Welt und meldet ihre Konfiguration typisiert', async () => {
+    const { SceneRenderer } = await import('@/rendering/SceneRenderer');
+    const container = {
+      clientWidth: 800,
+      clientHeight: 600,
+      append: vi.fn(),
+    } as unknown as HTMLElement;
+    const states: { fingerprint: string; cellCount: number; seed: string }[] = [];
+    const renderer = new SceneRenderer(container, 'procedural', undefined, undefined, {
+      config: { seed: 'before', density: 'low' },
+      onStateChange: (state) =>
+        states.push({
+          fingerprint: state.fingerprint,
+          cellCount: state.cellCount,
+          seed: state.config.seed,
+        }),
+    });
+    const firstFingerprint = renderer.proceduralState?.fingerprint;
+
+    const next = await renderer.regenerateProceduralWorld({ seed: 'after', density: 'high' });
+
+    expect(next.config.seed).toBe('after');
+    expect(next.config.density).toBe('high');
+    expect(next.cellCount).toBe(2562);
+    expect(next.fingerprint).not.toBe(firstFingerprint);
+    expect(states.at(-1)).toEqual({
+      fingerprint: next.fingerprint,
+      cellCount: 2562,
+      seed: 'after',
+    });
+  });
 });

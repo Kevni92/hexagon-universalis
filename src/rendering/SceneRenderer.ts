@@ -8,6 +8,7 @@ import { DESKTOP_QUALITY_PROFILE, type QualityProfile } from '@/topology/lod/pro
 import { EarthChunkRuntime, type EarthRuntimeStatus } from '@/data/EarthChunkRuntime';
 import { EarthWorldModel } from '@/data/EarthWorldModel';
 import { ProceduralWorldLod, type ProceduralWorldLodLevel } from '@/world/proceduralWorldLod';
+import type { ProceduralWorldConfig } from '@/world/proceduralWorld';
 
 import { createCellGlobeMesh } from './CellGlobe';
 import { ChunkRenderer } from './ChunkRenderer';
@@ -22,6 +23,19 @@ export type WorldMode = 'earth' | 'demo' | 'lod' | 'procedural';
 
 export interface RendererErrorTarget {
   show(message: string): void;
+}
+
+export interface ProceduralRendererState {
+  readonly config: ProceduralWorldConfig;
+  readonly fingerprint: string;
+  readonly lodLevel: ProceduralWorldLodLevel;
+  readonly frequency: number;
+  readonly cellCount: number;
+}
+
+export interface ProceduralRendererOptions {
+  readonly config?: Partial<ProceduralWorldConfig>;
+  readonly onStateChange?: (state: ProceduralRendererState) => void;
 }
 
 export class SceneRenderer {
@@ -44,12 +58,15 @@ export class SceneRenderer {
   private animationFrameId: number | null = null;
   private lastFrameTime = 0;
   private disposed = false;
+  private proceduralRequestId = 0;
+  private lastProceduralStateKey = '';
 
   public constructor(
     private readonly container: HTMLElement,
     worldMode: WorldMode = 'earth',
     lodQualityProfile: QualityProfile = DESKTOP_QUALITY_PROFILE,
     onEarthStatus?: (status: EarthRuntimeStatus) => void,
+    private readonly proceduralOptions: ProceduralRendererOptions = {},
   ) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO));
@@ -64,7 +81,7 @@ export class SceneRenderer {
     if (worldMode === 'procedural') {
       this.cellGlobe = null;
       this.worldLod = null;
-      this.proceduralWorldLod = new ProceduralWorldLod();
+      this.proceduralWorldLod = new ProceduralWorldLod(proceduralOptions.config);
       this.chunkRenderer = new ChunkRenderer(1, this.proceduralWorldLod.cellColors);
       this.world.add(this.chunkRenderer.group);
       this.earthRuntime = null;
@@ -125,6 +142,39 @@ export class SceneRenderer {
     if (this.proceduralWorldLod === null || this.visibleUnits.length === 0) return null;
     const depth = Math.max(...this.visibleUnits.map((unit) => unit.level));
     return (['global', 'regional', 'local'] as const)[depth] ?? null;
+  }
+
+  public get proceduralState(): ProceduralRendererState | null {
+    if (this.proceduralWorldLod === null) return null;
+    const profile = this.proceduralWorldLod.profile;
+    return {
+      config: this.proceduralWorldLod.config,
+      fingerprint: this.proceduralWorldLod.fingerprint,
+      lodLevel: this.activeResolutionLevel ?? 'global',
+      frequency: profile.quality.levels.global.frequency,
+      cellCount: profile.levelCellCounts.global,
+    };
+  }
+
+  public async regenerateProceduralWorld(
+    config: Partial<ProceduralWorldConfig>,
+  ): Promise<ProceduralRendererState> {
+    if (this.disposed || this.proceduralWorldLod === null || this.chunkRenderer === null)
+      throw new Error('Die prozedurale Testwelt ist nicht aktiv.');
+    const requestId = ++this.proceduralRequestId;
+    await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0));
+    if (requestId !== this.proceduralRequestId) {
+      const current = this.proceduralState;
+      if (current === null) throw new Error('Die prozedurale Testwelt ist nicht aktiv.');
+      return current;
+    }
+
+    this.proceduralWorldLod.reconfigure(config);
+    this.updateLod();
+    this.chunkRenderer.setCellColors(this.proceduralWorldLod.cellColors, this.visibleUnits);
+    const next = this.proceduralState;
+    if (next === null) throw new Error('Die prozedurale Testwelt ist nicht aktiv.');
+    return next;
   }
 
   public start(): void {
@@ -230,7 +280,20 @@ export class SceneRenderer {
       this.camera.position.y,
       this.camera.position.z,
     ).toFixed(2);
+    if (this.proceduralWorldLod !== null) {
+      canvas.dataset.worldFingerprint = this.proceduralWorldLod.fingerprint;
+      this.emitProceduralState();
+    }
     this.requestVisibleEarthData();
+  }
+
+  private emitProceduralState(): void {
+    const state = this.proceduralState;
+    if (state === null || this.proceduralOptions.onStateChange === undefined) return;
+    const key = `${state.fingerprint}:${state.lodLevel}:${state.config.density}`;
+    if (key === this.lastProceduralStateKey) return;
+    this.lastProceduralStateKey = key;
+    this.proceduralOptions.onStateChange(state);
   }
 
   private async initializeEarth(): Promise<void> {

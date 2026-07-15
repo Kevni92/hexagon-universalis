@@ -44,6 +44,12 @@ Zellzahlen, die deutlich erweiterte Nahzoomgrenze, Hystereseschwellen und Budget
 [docs/procedural-world-lod.md](./docs/procedural-world-lod.md) dokumentiert. Das bestehende
 `?world=lod` bleibt als reine Geometrie-Diagnose verfügbar.
 
+Das rechte Testwelt-Panel wendet Seed und eines der Profile `low`, `standard` oder `high` erst über
+**Welt neu generieren** an. Aktive Zellzahl, Frequenz, Welt-LOD und Fingerprint bleiben dort
+sichtbar; erfolgreiche Konfigurationen werden für reproduzierbare Reloads in die URL geschrieben.
+Seedformat, Profilwerte, Statusmodell und responsives Verhalten beschreibt
+[docs/procedural-world-controls.md](./docs/procedural-world-controls.md).
+
 ## Produktionsbuild
 
 ```bash

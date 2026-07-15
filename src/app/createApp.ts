@@ -1,4 +1,11 @@
 import { SceneRenderer, type WorldMode } from '@/rendering/SceneRenderer';
+import {
+  DEFAULT_PROCEDURAL_WORLD_CONFIG,
+  PROCEDURAL_DENSITY_PROFILES,
+  type ProceduralDensityProfileId,
+  type ProceduralWorldConfig,
+} from '@/world/proceduralWorld';
+import { ProceduralWorldControls, type ProceduralWorldUiState } from '@/ui/ProceduralWorldControls';
 
 export interface App {
   start(): void;
@@ -8,13 +15,31 @@ export interface App {
 const DEMO_STATUS = 'Tile-Demo – keine reale Erde';
 const EARTH_STATUS = 'Versionierte Erddaten werden geladen ...';
 const LOD_STATUS = 'Multi-LOD-Testszene bereit';
-const PROCEDURAL_STATUS = 'Prozedurale Testwelt – künstliche Geografie';
+const PROCEDURAL_STATUS = 'Prozedurale Testwelt – keine reale Erde';
 
 const WORLD_MODES: readonly WorldMode[] = ['earth', 'demo', 'lod', 'procedural'];
 
 export function resolveWorldMode(search: string): WorldMode {
   const requested = new URLSearchParams(search).get('world');
   return WORLD_MODES.find((mode) => mode === requested) ?? 'earth';
+}
+
+export function resolveProceduralWorldConfig(
+  search: string,
+): Pick<ProceduralWorldConfig, 'seed' | 'density'> {
+  const parameters = new URLSearchParams(search);
+  const requestedSeed = parameters.get('seed')?.trim();
+  const requestedDensity = parameters.get('density');
+  return {
+    seed:
+      requestedSeed !== undefined && requestedSeed.length >= 1 && requestedSeed.length <= 128
+        ? requestedSeed
+        : DEFAULT_PROCEDURAL_WORLD_CONFIG.seed,
+    density:
+      requestedDensity !== null && Object.hasOwn(PROCEDURAL_DENSITY_PROFILES, requestedDensity)
+        ? (requestedDensity as ProceduralDensityProfileId)
+        : DEFAULT_PROCEDURAL_WORLD_CONFIG.density,
+  };
 }
 
 function statusForWorldMode(worldMode: WorldMode): string {
@@ -35,6 +60,7 @@ export function createApp(root: HTMLElement, locationSearch = window.location.se
       <p id="status" class="status" data-testid="app-status" role="status" aria-live="polite">${statusForWorldMode(worldMode)}</p>
       </header>
       <section class="viewport" data-testid="globe-viewport" aria-label="Interaktive 3D-Testszene"></section>
+      ${worldMode === 'procedural' ? '<div class="world-controls-host"></div>' : ''}
     </main>
   `;
 
@@ -45,14 +71,46 @@ export function createApp(root: HTMLElement, locationSearch = window.location.se
   }
 
   let renderer: SceneRenderer | null = null;
+  let proceduralControls: ProceduralWorldControls | null = null;
+  let latestProceduralState: ProceduralWorldUiState | null = null;
 
   try {
-    renderer = new SceneRenderer(viewport, worldMode, undefined, (earthStatus) => {
-      const status = root.querySelector<HTMLElement>('#status');
-      if (status === null) return;
-      status.textContent = earthStatus.message;
-      status.classList.toggle('status-error', earthStatus.phase === 'error');
-    });
+    renderer = new SceneRenderer(
+      viewport,
+      worldMode,
+      undefined,
+      (earthStatus) => {
+        const status = root.querySelector<HTMLElement>('#status');
+        if (status === null) return;
+        status.textContent = earthStatus.message;
+        status.classList.toggle('status-error', earthStatus.phase === 'error');
+      },
+      worldMode === 'procedural'
+        ? {
+            config: resolveProceduralWorldConfig(locationSearch),
+            onStateChange: (state) => {
+              latestProceduralState = state;
+              proceduralControls?.update(state);
+            },
+          }
+        : undefined,
+    );
+    if (worldMode === 'procedural') {
+      const controlsHost = root.querySelector<HTMLElement>('.world-controls-host');
+      const initialState = latestProceduralState ?? renderer.proceduralState;
+      if (controlsHost === null || initialState === null)
+        throw new Error('Testwelt-Steuerung konnte nicht initialisiert werden.');
+      proceduralControls = new ProceduralWorldControls(
+        controlsHost,
+        initialState,
+        async (config) => {
+          if (renderer === null) throw new Error('Die 3D-Szene ist nicht verfügbar.');
+          const state = await renderer.regenerateProceduralWorld(config);
+          updateProceduralUrl(state.config);
+          return state;
+        },
+      );
+    }
   } catch (error) {
     const status = root.querySelector<HTMLElement>('#status');
     if (status !== null) {
@@ -67,8 +125,17 @@ export function createApp(root: HTMLElement, locationSearch = window.location.se
   return {
     start: () => renderer?.start(),
     dispose: () => {
+      proceduralControls?.dispose();
       renderer?.dispose();
       root.replaceChildren();
     },
   };
+}
+
+function updateProceduralUrl(config: ProceduralWorldConfig): void {
+  const url = new URL(window.location.href);
+  url.searchParams.set('world', 'procedural');
+  url.searchParams.set('seed', config.seed);
+  url.searchParams.set('density', config.density);
+  window.history.replaceState(null, '', url);
 }

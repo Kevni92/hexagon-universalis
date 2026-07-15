@@ -85,23 +85,77 @@ test('procedural world reaches Global, Regional and Lokal without console errors
 
   await page.goto('/?world=procedural');
   await expect(page.getByTestId('app-status')).toHaveText(
-    'Prozedurale Testwelt – künstliche Geografie',
+    'Prozedurale Testwelt – keine reale Erde',
   );
   const canvas = page.locator('canvas.viewport-canvas');
+  const lodOutput = page.getByTestId('procedural-lod');
   await expect(canvas).toHaveAttribute('data-lod-level', 'global');
+  await expect(lodOutput).toHaveText('Global');
 
   await canvas.dispatchEvent('wheel', { deltaY: -400 });
   await expect(canvas).toHaveAttribute('data-lod-level', 'regional');
+  await expect(lodOutput).toHaveText('Regional');
   await expect
     .poll(async () => Number(await canvas.getAttribute('data-camera-distance')))
     .toBeGreaterThan(2);
   await canvas.dispatchEvent('wheel', { deltaY: -650 });
   await expect(canvas).toHaveAttribute('data-lod-level', 'local', { timeout: 15_000 });
+  await expect(lodOutput).toHaveText('Lokal');
   await expect
     .poll(async () => Number(await canvas.getAttribute('data-camera-distance')))
     .toBeLessThan(1.5);
   await canvas.dispatchEvent('wheel', { deltaY: 3_000 });
   await expect(canvas).toHaveAttribute('data-lod-level', 'global');
 
+  expect(pageErrors).toEqual([]);
+});
+
+test('procedural controls reproduce seeds, validate density and stay inside the viewport', async ({
+  page,
+}) => {
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+  await page.goto('/?world=procedural&seed=e2e-reference&density=low');
+
+  const controls = page.getByTestId('procedural-controls');
+  const seed = page.getByLabel('Seed');
+  const density = page.getByLabel('Hex-Dichte');
+  const regenerate = page.getByRole('button', { name: 'Welt neu generieren' });
+  const fingerprint = page.getByTestId('procedural-fingerprint');
+  await expect(controls).toBeVisible();
+  await expect(seed).toHaveValue('e2e-reference');
+  await expect(density).toHaveValue('low');
+  await expect(page.getByTestId('procedural-cell-count')).toHaveText('162');
+  const referenceFingerprint = await fingerprint.textContent();
+  expect(referenceFingerprint).toMatch(/^pw1-[0-9a-f]{8}$/);
+
+  await seed.fill('e2e-changed');
+  await seed.press('Enter');
+  await expect(page.getByTestId('procedural-generation-status')).toHaveText('Welt bereit');
+  await expect(fingerprint).not.toHaveText(referenceFingerprint!);
+
+  await seed.fill('e2e-reference');
+  await regenerate.click();
+  await expect(fingerprint).toHaveText(referenceFingerprint!);
+
+  await density.selectOption('standard');
+  await regenerate.click();
+  await expect(page.getByTestId('procedural-cell-count')).toHaveText('642');
+  await expect(page).toHaveURL(/seed=e2e-reference&density=standard/);
+  await expect
+    .poll(() =>
+      controls.evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        return (
+          bounds.left >= 0 &&
+          bounds.right <= window.innerWidth &&
+          bounds.bottom <= window.innerHeight
+        );
+      }),
+    )
+    .toBe(true);
+
+  await page.goto('/');
+  await expect(page.getByTestId('procedural-controls')).toHaveCount(0);
   expect(pageErrors).toEqual([]);
 });
