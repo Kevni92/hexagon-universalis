@@ -13,12 +13,14 @@ export interface CellGlobeGeometryData {
 }
 
 export type CellSurfaceMode = 'spherical' | 'tangent-plane';
+export type CellSurfaceRadius = (position: Vector3, cellId: string) => number;
 
 export function createCellGlobeGeometryData(
   topology: GeodesicTopology,
   radius = topology.radius,
   cellColors?: ReadonlyMap<string, string>,
   surfaceMode: CellSurfaceMode = 'spherical',
+  surfaceRadius?: CellSurfaceRadius,
 ): CellGlobeGeometryData {
   if (!Number.isFinite(radius) || radius <= 0)
     throw new RangeError('radius muss größer als 0 sein.');
@@ -37,8 +39,9 @@ export function createCellGlobeGeometryData(
       const normal = triangleNormal(center, first, second);
       const triangle = dot(normal, center) >= 0 ? [center, first, second] : [center, second, first];
       for (const vertex of triangle) {
-        positions.push(vertex.x * radius, vertex.y * radius, vertex.z * radius);
-        const vertexNormal = surfaceMode === 'tangent-plane' ? center : vertex;
+        const vertexRadius = resolvedRadius(vertex, cell.id, radius, surfaceRadius);
+        positions.push(vertex.x * vertexRadius, vertex.y * vertexRadius, vertex.z * vertexRadius);
+        const vertexNormal = surfaceMode === 'tangent-plane' ? center : normalize(vertex);
         normals.push(vertexNormal.x, vertexNormal.y, vertexNormal.z);
         if (cellColors !== undefined)
           colors.push(...hexToRgb(cellColors.get(cell.id) ?? '#173b68'));
@@ -97,6 +100,25 @@ function surfacePoint(boundary: Vector3, center: Vector3, surfaceMode: CellSurfa
     y: boundary.y + center.y * planeOffset,
     z: boundary.z + center.z * planeOffset,
   };
+}
+
+function resolvedRadius(
+  vertex: Vector3,
+  cellId: string,
+  fallback: number,
+  surfaceRadius?: CellSurfaceRadius,
+): number {
+  const value = surfaceRadius?.(normalize(vertex), cellId) ?? fallback;
+  if (!Number.isFinite(value) || value <= 0)
+    throw new RangeError(`Ungültiger Oberflächenradius für Zelle ${cellId}.`);
+  return value;
+}
+
+function normalize(vector: Vector3): Vector3 {
+  const length = Math.hypot(vector.x, vector.y, vector.z);
+  if (!Number.isFinite(length) || length <= 0)
+    throw new RangeError('Oberflächenpunkt muss endlich sein.');
+  return { x: vector.x / length, y: vector.y / length, z: vector.z / length };
 }
 
 function subtract(first: Vector3, second: Vector3): Vector3 {

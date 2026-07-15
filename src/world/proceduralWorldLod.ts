@@ -1,4 +1,4 @@
-import { TILE_PROFILES, type TileType } from '@/data/tileCatalog';
+import { TILE_PROFILES, type TileModifier, type TileType } from '@/data/tileCatalog';
 import type { Vector3 } from '@/topology/geodesic';
 import {
   SelectiveOverlayWorldLodController,
@@ -18,6 +18,7 @@ import {
 } from './proceduralWorld';
 
 export type ProceduralWorldLodLevel = 'global' | 'regional' | 'local';
+export type ProceduralCellColor = (cell: ProceduralWorldCell) => string;
 
 export interface ProceduralLodBudgetProfile {
   readonly density: ProceduralDensityProfileId;
@@ -95,6 +96,8 @@ export interface ProceduralLodCell {
   readonly temperature: number;
   readonly moisture: number;
   readonly tileType: TileType;
+  readonly modifiers: readonly TileModifier[];
+  readonly relief: ProceduralWorldCell['relief'];
 }
 
 export interface ProceduralLodCacheStats {
@@ -118,7 +121,10 @@ export class ProceduralWorldLod {
   private generation = 1;
   private disposed = false;
 
-  public constructor(config: Partial<ProceduralWorldConfig> = {}) {
+  public constructor(
+    config: Partial<ProceduralWorldConfig> = {},
+    private readonly colorForCell: ProceduralCellColor = defaultProceduralCellColor,
+  ) {
     this.configValue = normalizeProceduralWorldConfig(config);
     this.referenceWorld = createProceduralWorld(this.configValue);
     this.controller = new SelectiveOverlayWorldLodController(this.profile.quality);
@@ -136,6 +142,10 @@ export class ProceduralWorldLod {
     return this.referenceWorld.fingerprint;
   }
 
+  public get sourceCells(): readonly ProceduralWorldCell[] {
+    return this.referenceWorld.cells;
+  }
+
   public get cellColors(): ReadonlyMap<string, string> {
     return this.colorsById;
   }
@@ -151,7 +161,7 @@ export class ProceduralWorldLod {
       for (const [index, lodCell] of unit.cells.entries()) {
         const id = visibleCellId(unit, index);
         if (this.projectedById.has(id)) continue;
-        const source = nearestWorldCell(lodCell.cell.center, this.referenceWorld.cells);
+        const source = this.sampleAt(lodCell.cell.center);
         const projected: ProceduralLodCell = {
           cellId: id,
           sourceCellId: source.cellId,
@@ -162,9 +172,11 @@ export class ProceduralWorldLod {
           temperature: source.temperature,
           moisture: source.moisture,
           tileType: source.tileType,
+          modifiers: source.modifiers,
+          relief: source.relief,
         };
         this.projectedById.set(id, projected);
-        this.colorsById.set(id, TILE_PROFILES[source.tileType].color);
+        this.colorsById.set(id, this.colorForCell(source));
       }
     }
     this.pruneProjectionCache(units);
@@ -173,6 +185,11 @@ export class ProceduralWorldLod {
 
   public projectedCell(cellId: string): ProceduralLodCell | undefined {
     return this.projectedById.get(cellId);
+  }
+
+  public sampleAt(center: Vector3): ProceduralWorldCell {
+    this.assertActive();
+    return nearestWorldCell(center, this.referenceWorld.cells);
   }
 
   /**
@@ -238,6 +255,10 @@ export function validateProceduralLodProfiles(): void {
   }
 }
 
+function defaultProceduralCellColor(cell: ProceduralWorldCell): string {
+  return TILE_PROFILES[cell.tileType].color;
+}
+
 function nearestWorldCell(
   center: Vector3,
   cells: readonly ProceduralWorldCell[],
@@ -257,8 +278,8 @@ function nearestWorldCell(
   return nearest;
 }
 
-function levelName(levelDepth: 0 | 1 | 2): ProceduralWorldLodLevel {
-  return (['global', 'regional', 'local'] as const)[levelDepth];
+function levelName(level: 0 | 1 | 2): ProceduralWorldLodLevel {
+  return (['global', 'regional', 'local'] as const)[level];
 }
 
 function dot(first: Vector3, second: Vector3): number {

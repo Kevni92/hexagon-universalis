@@ -34,6 +34,34 @@ describe('createCellGlobeGeometryData', () => {
     }
   });
 
+  it('applies a deterministic per-cell surface radius without losing picking IDs', () => {
+    const topology = createGeodesicTopology(2);
+    const selected = topology.cells[0];
+    if (selected === undefined) throw new Error('missing cell');
+    const data = createCellGlobeGeometryData(
+      topology,
+      1,
+      undefined,
+      'spherical',
+      (_position, cellId) => (cellId === selected.id ? 1.08 : 0.99),
+    );
+
+    for (const [triangleIndex, cellId] of data.cellIds.entries()) {
+      const expectedRadius = cellId === selected.id ? 1.08 : 0.99;
+      for (let vertexIndex = 0; vertexIndex < 3; vertexIndex += 1) {
+        const offset = triangleIndex * 9 + vertexIndex * 3;
+        expect(
+          Math.hypot(
+            data.positions[offset] ?? 0,
+            data.positions[offset + 1] ?? 0,
+            data.positions[offset + 2] ?? 0,
+          ),
+        ).toBeCloseTo(expectedRadius, 6);
+      }
+    }
+    expect(data.cellIds).toContain(selected.id);
+  });
+
   it('projects every local tile onto its tangent plane with one stable up normal', () => {
     const topology = createGeodesicTopology(2);
     const radius = 2;
@@ -64,6 +92,9 @@ describe('createCellGlobeGeometryData', () => {
     const topology = createGeodesicTopology(1);
     expect(() => createCellGlobeGeometryData(topology, 0)).toThrow(RangeError);
     expect(() => createCellGlobeGeometryData(topology, Number.NaN)).toThrow(RangeError);
+    expect(() =>
+      createCellGlobeGeometryData(topology, 1, undefined, 'spherical', () => Number.NaN),
+    ).toThrow(RangeError);
   });
 });
 

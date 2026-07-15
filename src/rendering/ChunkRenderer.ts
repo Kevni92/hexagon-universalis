@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 
-import type { GeodesicCell, GeodesicTopology } from '@/topology/geodesic';
+import type { GeodesicCell, GeodesicTopology, Vector3 } from '@/topology/geodesic';
 import { visibleCellId, type VisibleUnit } from '@/topology/lod/WorldLod';
 import { createCellGlobeGeometryData } from './CellGlobe';
+
+export type ChunkSurfaceRadius = (position: Vector3, level: 0 | 1 | 2, cellId: string) => number;
 
 /**
  * Rendert eine stabile Liste sichtbarer Zell-Chunks (`VisibleUnit[]`) als
@@ -24,6 +26,7 @@ export class ChunkRenderer {
   public constructor(
     private readonly radius = 1,
     private cellColors?: ReadonlyMap<string, string>,
+    private readonly surfaceRadius?: ChunkSurfaceRadius,
   ) {
     this.group.name = 'chunk-renderer';
   }
@@ -106,11 +109,15 @@ export class ChunkRenderer {
     unit: VisibleUnit,
   ): THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial> {
     const topology = unitToTopology(unit);
+    const surfaceRadius = this.surfaceRadius;
     const data = createCellGlobeGeometryData(
       topology,
       this.radius + unit.level * 0.003,
       this.cellColors,
       unit.level === 2 ? 'tangent-plane' : 'spherical',
+      surfaceRadius === undefined
+        ? undefined
+        : (position, cellId) => surfaceRadius(position, unit.level, cellId),
     );
 
     const geometry = new THREE.BufferGeometry();
@@ -145,7 +152,6 @@ export class ChunkRenderer {
   }
 }
 
-/** Verpackt die Zellen einer VisibleUnit als minimale GeodesicTopology für die bestehende Geometrie-Pipeline. */
 function unitSignature(unit: VisibleUnit): string {
   return unit.cells.map((_cell, index) => visibleCellId(unit, index)).join('|');
 }

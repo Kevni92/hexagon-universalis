@@ -13,11 +13,18 @@ import type { ProceduralWorldConfig } from '@/world/proceduralWorld';
 import { createCellGlobeMesh } from './CellGlobe';
 import { ChunkRenderer } from './ChunkRenderer';
 import { computeLocalCameraState } from './CameraFrame';
+import { ProceduralDetailRenderer } from './ProceduralDetails';
+import {
+  proceduralSurfaceRadius,
+  proceduralTerrainDiagnostics,
+  proceduralTileColor,
+} from './ProceduralTerrain';
 
 const MAX_PIXEL_RATIO = 2;
 const CAMERA = { fov: 45, near: 0.1, far: 100, z: 3.4 } as const;
 const SHOWCASE_TOPOLOGY_FREQUENCY = 2;
 const PROCEDURAL_MIN_CAMERA_DISTANCE = 1.18;
+const PROCEDURAL_LEVELS = ['global', 'regional', 'local'] as const;
 
 export type WorldMode = 'earth' | 'demo' | 'lod' | 'procedural';
 
@@ -49,6 +56,7 @@ export class SceneRenderer {
   private readonly chunkRenderer: ChunkRenderer | null;
   private readonly worldLod: WorldLodController | null;
   private readonly proceduralWorldLod: ProceduralWorldLod | null;
+  private readonly proceduralDetails: ProceduralDetailRenderer | null;
   private readonly resizeObserver: ResizeObserver | null;
   private readonly earthRuntime: EarthChunkRuntime | null;
   private readonly earthModel = new EarthWorldModel();
@@ -60,6 +68,7 @@ export class SceneRenderer {
   private disposed = false;
   private proceduralRequestId = 0;
   private lastProceduralStateKey = '';
+  private lastProceduralDiagnosticsFingerprint = '';
 
   public constructor(
     private readonly container: HTMLElement,
@@ -81,20 +90,36 @@ export class SceneRenderer {
     if (worldMode === 'procedural') {
       this.cellGlobe = null;
       this.worldLod = null;
-      this.proceduralWorldLod = new ProceduralWorldLod(proceduralOptions.config);
-      this.chunkRenderer = new ChunkRenderer(1, this.proceduralWorldLod.cellColors);
-      this.world.add(this.chunkRenderer.group);
+      const proceduralWorldLod = new ProceduralWorldLod(
+        proceduralOptions.config,
+        proceduralTileColor,
+      );
+      this.proceduralWorldLod = proceduralWorldLod;
+      this.chunkRenderer = new ChunkRenderer(
+        1,
+        proceduralWorldLod.cellColors,
+        (position, level, cellId) => {
+          const elevation =
+            proceduralWorldLod.projectedCell(cellId)?.elevation ??
+            proceduralWorldLod.sampleAt(position).elevation;
+          return proceduralSurfaceRadius(elevation, PROCEDURAL_LEVELS[level]);
+        },
+      );
+      this.proceduralDetails = new ProceduralDetailRenderer();
+      this.world.add(this.chunkRenderer.group, this.proceduralDetails.group);
       this.earthRuntime = null;
     } else if (worldMode === 'lod' || worldMode === 'earth') {
       this.cellGlobe = null;
       this.worldLod = new WorldLodController(lodQualityProfile);
       this.proceduralWorldLod = null;
+      this.proceduralDetails = null;
       this.chunkRenderer = new ChunkRenderer();
       this.world.add(this.chunkRenderer.group);
       this.earthRuntime = worldMode === 'earth' ? new EarthChunkRuntime() : null;
     } else {
       this.worldLod = null;
       this.proceduralWorldLod = null;
+      this.proceduralDetails = null;
       this.chunkRenderer = null;
       this.cellGlobe =
         worldMode === 'demo'
@@ -128,20 +153,28 @@ export class SceneRenderer {
     } else this.ready = Promise.resolve();
   }
 
-  /** Anzahl aktiver Draw Calls (Chunks) im LOD-Modus; 0 in den übrigen Modi. */
+  /** Anzahl aktiver Draw Calls der gebündelten Zellflächen. */
   public get activeChunkCount(): number {
     return this.chunkRenderer?.activeChunkCount ?? 0;
   }
 
-  /** Gesamtzahl aktuell materialisierter Zellen im LOD-Modus. */
+  /** Gesamtzahl aktuell materialisierter Zellen. */
   public get activeCellCount(): number {
     return this.chunkRenderer?.activeCellCount ?? 0;
+  }
+
+  public get activeDetailInstanceCount(): number {
+    return this.proceduralDetails?.activeInstanceCount ?? 0;
+  }
+
+  public get activeDetailDrawCallCount(): number {
+    return this.proceduralDetails?.activeDrawCallCount ?? 0;
   }
 
   public get activeResolutionLevel(): ProceduralWorldLodLevel | null {
     if (this.proceduralWorldLod === null || this.visibleUnits.length === 0) return null;
     const depth = Math.max(...this.visibleUnits.map((unit) => unit.level));
-    return (['global', 'regional', 'local'] as const)[depth] ?? null;
+    return PROCEDURAL_LEVELS[depth] ?? null;
   }
 
   public get proceduralState(): ProceduralRendererState | null {
@@ -193,8 +226,7 @@ export class SceneRenderer {
     this.controls.dispose();
     if (this.resizeObserver === null) window.removeEventListener('resize', this.resize);
 
-    // ChunkRenderer verwaltet seine Meshes selbst (differenzieller Cache); explizit disposen,
-    // bevor der generische world.traverse-Sweep unten läuft, damit keine Listener/Caches übrig bleiben.
+    this.proceduralDetails?.dispose();
     this.chunkRenderer?.dispose();
     this.proceduralWorldLod?.dispose();
     this.earthRuntime?.dispose();
@@ -249,13 +281,6 @@ export class SceneRenderer {
     this.renderer.setSize(width, height, false);
   };
 
-  /**
-   * Berechnet die aktuell sichtbare Chunk-Liste und aktualisiert den
-   * `ChunkRenderer` differenziell. Kamera und Sichtkegel werden in das
-   * lokale (unrotierte) Koordinatensystem der Welt transformiert, da
-   * `GlobeControls` die Kamera fix hält und stattdessen `this.world` rotiert
-   * (siehe `GlobeControls.applyRotation`).
-   */
   private updateLod(): void {
     if ((this.worldLod === null && this.proceduralWorldLod === null) || this.chunkRenderer === null)
       return;
@@ -282,9 +307,32 @@ export class SceneRenderer {
     ).toFixed(2);
     if (this.proceduralWorldLod !== null) {
       canvas.dataset.worldFingerprint = this.proceduralWorldLod.fingerprint;
+      this.updateProceduralDetailsAndDiagnostics();
       this.emitProceduralState();
     }
     this.requestVisibleEarthData();
+  }
+
+  private updateProceduralDetailsAndDiagnostics(): void {
+    const proceduralWorldLod = this.proceduralWorldLod;
+    if (proceduralWorldLod === null) return;
+    this.proceduralDetails?.update(
+      this.visibleUnits,
+      (cellId) => proceduralWorldLod.projectedCell(cellId),
+      proceduralWorldLod.fingerprint,
+    );
+    const canvas = this.renderer.domElement;
+    canvas.dataset.detailInstances = String(this.activeDetailInstanceCount);
+    canvas.dataset.detailDrawCalls = String(this.activeDetailDrawCallCount);
+    canvas.dataset.renderDrawCalls = String(this.activeChunkCount + this.activeDetailDrawCallCount);
+    if (this.lastProceduralDiagnosticsFingerprint === proceduralWorldLod.fingerprint) return;
+    this.lastProceduralDiagnosticsFingerprint = proceduralWorldLod.fingerprint;
+    const diagnostics = proceduralTerrainDiagnostics(proceduralWorldLod.sourceCells);
+    canvas.dataset.terrainTypes = diagnostics.terrainTypes.join(',');
+    canvas.dataset.reliefBands = diagnostics.reliefBands.join(',');
+    canvas.dataset.terrainGroups = diagnostics.groups.join(',');
+    canvas.dataset.reliefMinimum = diagnostics.minimumRadius.toFixed(6);
+    canvas.dataset.reliefMaximum = diagnostics.maximumRadius.toFixed(6);
   }
 
   private emitProceduralState(): void {

@@ -50,6 +50,12 @@ sichtbar; erfolgreiche Konfigurationen werden für reproduzierbare Reloads in di
 Seedformat, Profilwerte, Statusmodell und responsives Verhalten beschreibt
 [docs/procedural-world-controls.md](./docs/procedural-world-controls.md).
 
+Kontinente, Ozeane, Küsten und alle Reliefbänder werden als echtes Geometrierelief dargestellt.
+Regional und lokal ergänzen deterministische, nach Detailtyp gebündelte Instanzen sowie
+nachbarschaftsbasierte Übergänge; global entstehen keine Einzelobjekte. Farbableitung,
+Reliefprofil, Picking-, Ressourcen- und Draw-Call-Budgets sind in
+[docs/procedural-terrain-rendering.md](./docs/procedural-terrain-rendering.md) dokumentiert.
+
 ## Produktionsbuild
 
 ```bash
