@@ -15,9 +15,9 @@ import { ChunkRenderer } from './ChunkRenderer';
 import { computeLocalCameraState } from './CameraFrame';
 import { ProceduralDetailRenderer } from './ProceduralDetails';
 import {
-  normalizeDirection,
   proceduralSurfaceRadius,
   proceduralTerrainDiagnostics,
+  proceduralTileColor,
 } from './ProceduralTerrain';
 
 const MAX_PIXEL_RATIO = 2;
@@ -68,6 +68,7 @@ export class SceneRenderer {
   private disposed = false;
   private proceduralRequestId = 0;
   private lastProceduralStateKey = '';
+  private lastProceduralDiagnosticsFingerprint = '';
 
   public constructor(
     private readonly container: HTMLElement,
@@ -89,14 +90,19 @@ export class SceneRenderer {
     if (worldMode === 'procedural') {
       this.cellGlobe = null;
       this.worldLod = null;
-      const proceduralWorldLod = new ProceduralWorldLod(proceduralOptions.config);
+      const proceduralWorldLod = new ProceduralWorldLod(
+        proceduralOptions.config,
+        proceduralTileColor,
+      );
       this.proceduralWorldLod = proceduralWorldLod;
       this.chunkRenderer = new ChunkRenderer(
         1,
         proceduralWorldLod.cellColors,
-        (position, level) => {
-          const source = proceduralWorldLod.sampleAt(normalizeDirection(position));
-          return proceduralSurfaceRadius(source.elevation, PROCEDURAL_LEVELS[level]);
+        (position, level, cellId) => {
+          const elevation =
+            proceduralWorldLod.projectedCell(cellId)?.elevation ??
+            proceduralWorldLod.sampleAt(position).elevation;
+          return proceduralSurfaceRadius(elevation, PROCEDURAL_LEVELS[level]);
         },
       );
       this.proceduralDetails = new ProceduralDetailRenderer();
@@ -199,7 +205,6 @@ export class SceneRenderer {
     this.proceduralWorldLod.reconfigure(config);
     this.updateLod();
     this.chunkRenderer.setCellColors(this.proceduralWorldLod.cellColors, this.visibleUnits);
-    this.updateProceduralDetailsAndDiagnostics();
     const next = this.proceduralState;
     if (next === null) throw new Error('Die prozedurale Testwelt ist nicht aktiv.');
     return next;
@@ -309,17 +314,20 @@ export class SceneRenderer {
   }
 
   private updateProceduralDetailsAndDiagnostics(): void {
-    if (this.proceduralWorldLod === null) return;
+    const proceduralWorldLod = this.proceduralWorldLod;
+    if (proceduralWorldLod === null) return;
     this.proceduralDetails?.update(
       this.visibleUnits,
-      (cellId) => this.proceduralWorldLod?.projectedCell(cellId),
-      this.proceduralWorldLod.fingerprint,
+      (cellId) => proceduralWorldLod.projectedCell(cellId),
+      proceduralWorldLod.fingerprint,
     );
-    const diagnostics = proceduralTerrainDiagnostics(this.proceduralWorldLod.sourceCells);
     const canvas = this.renderer.domElement;
     canvas.dataset.detailInstances = String(this.activeDetailInstanceCount);
     canvas.dataset.detailDrawCalls = String(this.activeDetailDrawCallCount);
     canvas.dataset.renderDrawCalls = String(this.activeChunkCount + this.activeDetailDrawCallCount);
+    if (this.lastProceduralDiagnosticsFingerprint === proceduralWorldLod.fingerprint) return;
+    this.lastProceduralDiagnosticsFingerprint = proceduralWorldLod.fingerprint;
+    const diagnostics = proceduralTerrainDiagnostics(proceduralWorldLod.sourceCells);
     canvas.dataset.terrainTypes = diagnostics.terrainTypes.join(',');
     canvas.dataset.reliefBands = diagnostics.reliefBands.join(',');
     canvas.dataset.terrainGroups = diagnostics.groups.join(',');
