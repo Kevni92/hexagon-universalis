@@ -24,7 +24,24 @@ describe('resolveWorldMode', () => {
 
   it('activates the demo world only for the exact demo value', () => {
     expect(resolveWorldMode('?world=demo')).toBe('demo');
+    expect(resolveWorldMode('?world=procedural')).toBe('procedural');
     expect(resolveWorldMode('?world=other')).toBe('earth');
+  });
+
+  it('starts the explicitly labeled procedural test world', () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    const root = document.querySelector<HTMLElement>('#app');
+    if (root === null) throw new Error('missing root');
+
+    (SceneRenderer as unknown as { instances: { worldMode: string }[] }).instances = [];
+    createApp(root, '?world=procedural');
+
+    expect(root.querySelector('#status')?.textContent).toBe(
+      'Prozedurale Testwelt – künstliche Geografie',
+    );
+    expect((SceneRenderer as unknown as { instances: { worldMode: string }[] }).instances).toEqual([
+      { worldMode: 'procedural' },
+    ]);
   });
 });
 

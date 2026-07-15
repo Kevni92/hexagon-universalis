@@ -76,3 +76,27 @@ test('globe canvas accepts pointer and wheel interaction', async ({ page }) => {
   await page.mouse.wheel(0, 120);
   await expect(page.getByTestId('app-status')).toBeVisible();
 });
+
+test('procedural world reaches Global, Regional and Lokal without console errors', async ({
+  page,
+}) => {
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+
+  await page.goto('/?world=procedural');
+  await expect(page.getByTestId('app-status')).toHaveText(
+    'Prozedurale Testwelt – künstliche Geografie',
+  );
+  const canvas = page.locator('canvas.viewport-canvas');
+  await expect(canvas).toHaveAttribute('data-lod-level', 'global');
+
+  await canvas.hover();
+  await page.mouse.wheel(0, -400);
+  await expect(canvas).toHaveAttribute('data-lod-level', 'regional');
+  await page.mouse.wheel(0, -1_000);
+  await expect(canvas).toHaveAttribute('data-lod-level', 'local');
+  await page.mouse.wheel(0, 3_000);
+  await expect(canvas).toHaveAttribute('data-lod-level', 'global');
+
+  expect(pageErrors).toEqual([]);
+});

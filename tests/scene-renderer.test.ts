@@ -99,6 +99,7 @@ vi.mock('three', () => {
     public readonly domElement = {
       addEventListener: vi.fn(),
       className: '',
+      dataset: {} as Record<string, string>,
       remove: vi.fn(),
       removeEventListener: vi.fn(),
       style: {},
@@ -320,5 +321,21 @@ describe('SceneRenderer', () => {
 
     renderer.dispose();
     expect(renderer.activeChunkCount).toBe(0);
+  });
+
+  it('renders the procedural world through the named LOD pipeline', async () => {
+    const { SceneRenderer } = await import('@/rendering/SceneRenderer');
+    const container = {
+      clientWidth: 800,
+      clientHeight: 600,
+      append: vi.fn(),
+    } as unknown as HTMLElement;
+
+    const renderer = new SceneRenderer(container, 'procedural');
+
+    expect(renderer.activeChunkCount).toBeGreaterThan(0);
+    expect(renderer.activeCellCount).toBeGreaterThan(0);
+    expect(renderer.activeResolutionLevel).toBe('global');
+    renderer.dispose();
   });
 });

@@ -8,8 +8,9 @@ export interface App {
 const DEMO_STATUS = 'Tile-Demo – keine reale Erde';
 const EARTH_STATUS = 'Versionierte Erddaten werden geladen ...';
 const LOD_STATUS = 'Multi-LOD-Testszene bereit';
+const PROCEDURAL_STATUS = 'Prozedurale Testwelt – künstliche Geografie';
 
-const WORLD_MODES: readonly WorldMode[] = ['earth', 'demo', 'lod'];
+const WORLD_MODES: readonly WorldMode[] = ['earth', 'demo', 'lod', 'procedural'];
 
 export function resolveWorldMode(search: string): WorldMode {
   const requested = new URLSearchParams(search).get('world');
@@ -19,6 +20,7 @@ export function resolveWorldMode(search: string): WorldMode {
 function statusForWorldMode(worldMode: WorldMode): string {
   if (worldMode === 'demo') return DEMO_STATUS;
   if (worldMode === 'lod') return LOD_STATUS;
+  if (worldMode === 'procedural') return PROCEDURAL_STATUS;
   return EARTH_STATUS;
 }
 

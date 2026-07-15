@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 import type { GeodesicCell, GeodesicTopology } from '@/topology/geodesic';
-import type { VisibleUnit } from '@/topology/lod/WorldLod';
+import { visibleCellId, type VisibleUnit } from '@/topology/lod/WorldLod';
 import { createCellGlobeGeometryData } from './CellGlobe';
 
 /**
@@ -72,7 +72,13 @@ export class ChunkRenderer {
     }
 
     for (const unit of units) {
-      if (this.meshesByKey.has(unit.key)) continue;
+      const existing = this.meshesByKey.get(unit.key);
+      const signature = unitSignature(unit);
+      if (existing?.userData.unitSignature === signature) continue;
+      if (existing !== undefined) {
+        this.disposeMesh(existing);
+        this.meshesByKey.delete(unit.key);
+      }
       const mesh = this.buildMesh(unit);
       this.meshesByKey.set(unit.key, mesh);
       this.group.add(mesh);
@@ -100,7 +106,11 @@ export class ChunkRenderer {
     unit: VisibleUnit,
   ): THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial> {
     const topology = unitToTopology(unit);
-    const data = createCellGlobeGeometryData(topology, this.radius, this.cellColors);
+    const data = createCellGlobeGeometryData(
+      topology,
+      this.radius + unit.level * 0.003,
+      this.cellColors,
+    );
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(data.positions, 3));
@@ -123,6 +133,7 @@ export class ChunkRenderer {
     mesh.userData.cellIds = data.cellIds;
     mesh.userData.triangleCount = data.triangleCount;
     mesh.userData.level = unit.level;
+    mesh.userData.unitSignature = unitSignature(unit);
     return mesh;
   }
 
@@ -134,9 +145,13 @@ export class ChunkRenderer {
 }
 
 /** Verpackt die Zellen einer VisibleUnit als minimale GeodesicTopology für die bestehende Geometrie-Pipeline. */
+function unitSignature(unit: VisibleUnit): string {
+  return unit.cells.map((_cell, index) => visibleCellId(unit, index)).join('|');
+}
+
 function unitToTopology(unit: VisibleUnit): GeodesicTopology {
-  const cells: GeodesicCell[] = unit.cells.map((lodCell) => ({
-    id: lodCell.formattedId,
+  const cells: GeodesicCell[] = unit.cells.map((lodCell, index) => ({
+    id: visibleCellId(unit, index),
     center: lodCell.cell.center,
     boundary: lodCell.cell.boundary,
     neighborIds: lodCell.cell.neighborIds,

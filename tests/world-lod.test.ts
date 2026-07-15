@@ -91,6 +91,23 @@ describe('WorldLodController.update', () => {
     expect(level0Units).toHaveLength(1);
   });
 
+  it('enforces the local maxActiveChunks budget globally across all regional parents', () => {
+    const cappedProfile: QualityProfile = {
+      name: 'local-capped',
+      levels: {
+        global: { frequency: 2, refineAbovePx: Infinity, coarsenBelowPx: 0, maxActiveChunks: 1 },
+        regional: { frequency: 4, refineAbovePx: 1, coarsenBelowPx: 0.5, maxActiveChunks: 12 },
+        local: { frequency: 8, refineAbovePx: 1, coarsenBelowPx: 0.5, maxActiveChunks: 3 },
+      },
+    };
+    const controller = new WorldLodController(cappedProfile);
+    const units = controller.update(camera(2.2));
+
+    const localUnits = units.filter((unit) => unit.level === 2);
+    expect(localUnits.length).toBeGreaterThan(0);
+    expect(localUnits.length).toBeLessThanOrEqual(3);
+  });
+
   it('refines to regional chunks when zooming in close enough', () => {
     const controller = new WorldLodController(TEST_PROFILE);
     controller.update(camera(10)); // warm-up, weit weg

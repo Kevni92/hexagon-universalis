@@ -34,6 +34,16 @@ keine realen Geographie-, Höhen-, Fluss- oder Politikdaten und ist im
 Statusbereich eindeutig mit „Tile-Demo – keine reale Erde" gekennzeichnet.
 Der reale Erdmodus bleibt davon unverändert.
 
+### Prozedurale Multi-LOD-Testwelt
+
+`?world=procedural` öffnet eine eindeutig als künstlich gekennzeichnete, deterministische
+Testwelt. Sie verwendet denselben Seed und dieselben Generatorparameter in den benannten Stufen
+Global, Regional und Lokal. Beim Zoomen bleiben ferne Regionen global, während sichtbare
+Regional- und Lokalzellen als lückenlose, feinere Overlays materialisiert werden. Dichteprofile,
+Zellzahlen, Hystereseschwellen und Budgets sind in
+[docs/procedural-world-lod.md](./docs/procedural-world-lod.md) dokumentiert. Das bestehende
+`?world=lod` bleibt als reine Geometrie-Diagnose verfügbar.
+
 ## Produktionsbuild
 
 ```bash
