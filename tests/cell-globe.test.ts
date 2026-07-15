@@ -157,7 +157,10 @@ describe('createCellGlobeGeometryData', () => {
   });
 });
 
-function vectorAt(values: readonly number[], offset: number): {
+function vectorAt(
+  values: readonly number[],
+  offset: number,
+): {
   readonly x: number;
   readonly y: number;
   readonly z: number;
@@ -171,7 +174,11 @@ function vectorAt(values: readonly number[], offset: number): {
 
 function normalize(vector: { readonly x: number; readonly y: number; readonly z: number }) {
   const divisor = length(vector);
-  return { x: vector.x / divisor, y: vector.y / divisor, z: vector.z / divisor };
+  return {
+    x: vector.x / divisor,
+    y: vector.y / divisor,
+    z: vector.z / divisor,
+  };
 }
 
 function length(vector: { readonly x: number; readonly y: number; readonly z: number }): number {
