@@ -43,7 +43,10 @@ describe('ProceduralWorldLod', () => {
   });
 
   it('erreicht mit denselben Generatorparametern alle drei benannten Weltstufen', () => {
-    const world = new ProceduralWorldLod({ seed: 'lod-reference', density: 'standard' });
+    const world = new ProceduralWorldLod({
+      seed: 'lod-reference',
+      density: 'standard',
+    });
 
     const global = world.update(camera(10));
     expect(new Set(global.map((unit) => unit.level))).toEqual(new Set([0]));
@@ -70,7 +73,10 @@ describe('ProceduralWorldLod', () => {
   });
 
   it('ersetzt Elternflächen hierarchisch statt Global-, Regional- und Lokalflächen zu überlagern', () => {
-    const world = new ProceduralWorldLod({ seed: 'exclusive-lod', density: 'standard' });
+    const world = new ProceduralWorldLod({
+      seed: 'exclusive-lod',
+      density: 'standard',
+    });
     const units = world.update(camera(1.35));
     const globalIndices = new Set(cellsAtLevel(units, 0).map((cell) => cell.id.index));
 
@@ -94,10 +100,18 @@ describe('ProceduralWorldLod', () => {
   });
 
   it('liefert für dieselben räumlichen Referenzproben stufenübergreifend identische Fachwerte', () => {
-    const world = new ProceduralWorldLod({ seed: 'shared-position', density: 'standard' });
+    const world = new ProceduralWorldLod({
+      seed: 'shared-position',
+      density: 'standard',
+    });
     const seen = new Map<
       string,
-      { elevation: number; surface: string; temperature: number; moisture: number }
+      {
+        elevation: number;
+        surface: string;
+        temperature: number;
+        moisture: number;
+      }
     >();
     let sharedSamples = 0;
 
@@ -134,9 +148,9 @@ describe('ProceduralWorldLod', () => {
     );
 
     expect(new Set(ids).size).toBe(ids.length);
-    expect(
-      ids.filter((id) => id.startsWith('lvl2-local/')).every((id) => /\/c\d+$/.test(id)),
-    ).toBe(true);
+    expect(ids.filter((id) => id.startsWith('lvl2-local/')).every((id) => /\/c\d+$/.test(id))).toBe(
+      true,
+    );
   });
 
   it('invalidiert bei Seedwechsel nur Fachprojektionen und bei Dichtewechsel auch die Topologie', () => {
@@ -161,7 +175,10 @@ describe('ProceduralWorldLod', () => {
   });
 
   it('behält bei einer ungültigen Neukonfiguration die bisherige gültige Welt atomar bei', () => {
-    const world = new ProceduralWorldLod({ seed: 'valid-world', density: 'standard' });
+    const world = new ProceduralWorldLod({
+      seed: 'valid-world',
+      density: 'standard',
+    });
     const fingerprint = world.fingerprint;
 
     expect(() => world.reconfigure({ seed: '' })).toThrow(/Seed/);
