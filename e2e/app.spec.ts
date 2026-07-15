@@ -110,10 +110,9 @@ test('procedural world reaches Global, Regional and Lokal without console errors
   expect(pageErrors).toEqual([]);
 });
 
-test('procedural terrain exposes relief, complete terrain groups and bounded detail LOD', async (
-  { page },
-  testInfo,
-) => {
+test('procedural terrain exposes relief, complete terrain groups and bounded detail LOD', async ({
+  page,
+}, testInfo) => {
   const pageErrors: Error[] = [];
   page.on('pageerror', (error) => pageErrors.push(error));
   await page.goto('/?world=procedural');
