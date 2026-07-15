@@ -12,7 +12,7 @@ import { ProceduralWorldLod, type ProceduralWorldLodLevel } from '@/world/proced
 import type { ProceduralWorldConfig } from '@/world/proceduralWorld';
 
 import { createCellGlobeMesh } from './CellGlobe';
-import { ChunkRenderer } from './ChunkRenderer';
+import { ChunkRenderer, LOD_TRANSITION_DURATION_SECONDS } from './ChunkRenderer';
 import { computeLocalCameraState } from './CameraFrame';
 import { ProceduralDetailRenderer } from './ProceduralDetails';
 import { PROCEDURAL_CAMERA_RANGE } from './ProceduralCamera';
@@ -124,6 +124,7 @@ export class SceneRenderer {
           return proceduralSurfaceRadius(elevation, PROCEDURAL_LEVELS[level]);
         },
         3,
+        LOD_TRANSITION_DURATION_SECONDS,
       );
       this.proceduralDetails = new ProceduralDetailRenderer();
       this.world.add(this.chunkRenderer.group, this.proceduralDetails.group);
@@ -133,7 +134,13 @@ export class SceneRenderer {
       this.worldLod = new WorldLodController(lodQualityProfile);
       this.proceduralWorldLod = null;
       this.proceduralDetails = null;
-      this.chunkRenderer = new ChunkRenderer();
+      this.chunkRenderer = new ChunkRenderer(
+        1,
+        undefined,
+        undefined,
+        0,
+        LOD_TRANSITION_DURATION_SECONDS,
+      );
       this.world.add(this.chunkRenderer.group);
       this.earthRuntime = worldMode === 'earth' ? new EarthChunkRuntime() : null;
     } else {
@@ -171,6 +178,7 @@ export class SceneRenderer {
     this.resize();
     if ((this.worldLod !== null || this.proceduralWorldLod !== null) && this.chunkRenderer !== null)
       this.updateLod();
+    this.chunkRenderer?.updateTransitions(LOD_TRANSITION_DURATION_SECONDS);
     if (this.earthRuntime !== null) {
       if (onEarthStatus !== undefined) this.earthRuntime.subscribe(onEarthStatus);
       this.ready = this.initializeEarth().catch(() => undefined);
@@ -316,6 +324,7 @@ export class SceneRenderer {
     this.controls.update(deltaSeconds);
     if ((this.worldLod !== null || this.proceduralWorldLod !== null) && this.chunkRenderer !== null)
       this.updateLod();
+    this.chunkRenderer?.updateTransitions(deltaSeconds);
     this.renderer.render(this.scene, this.camera);
     this.animationFrameId = requestAnimationFrame(this.renderFrame);
   };

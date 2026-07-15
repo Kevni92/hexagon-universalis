@@ -200,4 +200,22 @@ describe('GlobeControls', () => {
     expect(closeTilt).toBeCloseTo(0.2);
     controls.dispose();
   });
+
+  it('keeps the northward close-up tilt stable across small zoom corrections', () => {
+    const { camera, controls, element } = createControls({
+      inertia: false,
+      minDistance: 1.2,
+      maxDistance: 3.4,
+    });
+
+    element.dispatch('wheel', { deltaY: -1_000_000, deltaMode: 0, preventDefault: vi.fn() });
+    const closeTilt = Math.asin(camera.position.y / camera.position.length());
+    element.dispatch('wheel', { deltaY: 20, deltaMode: 0, preventDefault: vi.fn() });
+    const correctedTilt = Math.asin(camera.position.y / camera.position.length());
+
+    expect(closeTilt).toBeCloseTo(THREE.MathUtils.degToRad(10));
+    expect(correctedTilt).toBeCloseTo(closeTilt);
+    expect(correctedTilt).toBeGreaterThan(0);
+    controls.dispose();
+  });
 });

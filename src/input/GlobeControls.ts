@@ -14,6 +14,8 @@ export interface GlobeControlsOptions {
   nearTilt?: number;
   /** Anteil des Zoomwegs, ab dem die automatische Nahneigung einsetzt. */
   nearTiltStart?: number;
+  /** Anteil des Zoomwegs, an dem die maximale Nahneigung erreicht ist. */
+  nearTiltEnd?: number;
 }
 
 interface PointerPosition {
@@ -31,6 +33,7 @@ const DEFAULTS = {
   zoomAdaptiveRotation: false,
   nearTilt: THREE.MathUtils.degToRad(10),
   nearTiltStart: 0.85,
+  nearTiltEnd: 0.95,
 } as const;
 
 const PITCH_LIMIT = Math.PI / 2 - 0.01;
@@ -69,9 +72,12 @@ export class GlobeControls {
     if (
       !Number.isFinite(this.options.nearTiltStart) ||
       this.options.nearTiltStart < 0 ||
-      this.options.nearTiltStart >= 1
+      this.options.nearTiltStart >= this.options.nearTiltEnd
     ) {
-      throw new RangeError('Start der Nahneigung muss im Intervall [0, 1) liegen.');
+      throw new RangeError('Start der Nahneigung muss vor ihrem Ende liegen.');
+    }
+    if (!Number.isFinite(this.options.nearTiltEnd) || this.options.nearTiltEnd > 1) {
+      throw new RangeError('Ende der Nahneigung muss im Intervall (Start, 1] liegen.');
     }
 
     this.setDistance(this.getCameraDistance() || this.options.minDistance);
@@ -233,7 +239,11 @@ export class GlobeControls {
       0,
       1,
     );
-    const nearProgress = smoothstep(this.options.nearTiltStart, 1, zoomProgress);
+    const nearProgress = smoothstep(
+      this.options.nearTiltStart,
+      this.options.nearTiltEnd,
+      zoomProgress,
+    );
     const automaticTilt = this.options.nearTilt * nearProgress;
     const latitude = clamp(this.pitch + automaticTilt, -PITCH_LIMIT, PITCH_LIMIT);
     const cosLatitude = Math.cos(latitude);

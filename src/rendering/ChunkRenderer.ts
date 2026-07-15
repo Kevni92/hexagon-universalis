@@ -6,6 +6,8 @@ import { createCellGlobeGeometryData, type CellPodiumOptions } from './CellGlobe
 
 export type ChunkSurfaceRadius = (position: Vector3, level: 0 | 1 | 2, cellId: string) => number;
 
+export const LOD_TRANSITION_DURATION_SECONDS = 0.18;
+
 const PODIUM_BASE_RADIUS_FACTOR = 0.975;
 const PODIUM_INSET_BY_LEVEL = [0.99, 0.97, 0.94] as const;
 const SUBSTRATE_RADIUS_FACTOR = 0.974;
@@ -37,6 +39,10 @@ export class ChunkRenderer {
     THREE.BufferGeometry,
     THREE.MeshStandardMaterial
   > | null;
+  private readonly transitions = new Map<
+    THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>,
+    Transition
+  >();
   private disposed = false;
   private geometryBuildCount = 0;
   private geometryDisposeCount = 0;
@@ -46,6 +52,7 @@ export class ChunkRenderer {
     private cellColors?: ReadonlyMap<string, string>,
     private readonly surfaceRadius?: ChunkSurfaceRadius,
     private readonly maxCachedMeshes = 0,
+    private readonly transitionDurationSeconds = 0,
   ) {
     this.group.name = 'chunk-renderer';
     this.substrateMesh = surfaceRadius === undefined ? null : this.createSubstrateMesh();
@@ -54,7 +61,11 @@ export class ChunkRenderer {
 
   /** Anzahl aktiver Flächen-Draw-Calls einschließlich des optionalen Planetenkörpers. */
   public get activeChunkCount(): number {
-    return this.meshesByKey.size + this.activeSubstrateDrawCallCount;
+    let transitioningOut = 0;
+    for (const transition of this.transitions.values()) {
+      if (transition.to === 0) transitioningOut += 1;
+    }
+    return this.meshesByKey.size + transitioningOut + this.activeSubstrateDrawCallCount;
   }
 
   public get activeSubstrateDrawCallCount(): number {
@@ -111,6 +122,7 @@ export class ChunkRenderer {
    */
   public update(units: readonly VisibleUnit[]): void {
     if (this.disposed) throw new Error('ChunkRenderer wurde bereits disposed.');
+    const initialUpdate = this.meshesByKey.size === 0 && this.transitions.size === 0;
     const nextKeys = new Set(units.map((unit) => unit.key));
 
     for (const [key, mesh] of this.meshesByKey) {
@@ -124,13 +136,16 @@ export class ChunkRenderer {
       const signature = this.unitSignature(unit);
       if (existing?.userData.unitSignature === signature) continue;
       if (existing !== undefined) {
-        this.disposeMesh(existing);
         this.meshesByKey.delete(unit.key);
+        this.deactivateMesh(unit.key, existing);
       }
       const cached = this.cachedMeshesByKey.get(unit.key);
       if (cached?.userData.unitSignature === signature) {
         this.cachedMeshesByKey.delete(unit.key);
+        this.transitions.delete(cached);
         cached.visible = true;
+        cached.material.opacity = 1;
+        cached.material.transparent = false;
         this.meshesByKey.set(unit.key, cached);
         this.group.add(cached);
         continue;
@@ -142,6 +157,35 @@ export class ChunkRenderer {
       const mesh = this.buildMesh(unit, signature);
       this.meshesByKey.set(unit.key, mesh);
       this.group.add(mesh);
+      if (!initialUpdate) this.startFadeIn(mesh);
+    }
+  }
+
+  /** Fortschritt der aktiven LOD-Überblendungen; pro Renderframe aufrufen. */
+  public updateTransitions(deltaSeconds: number): void {
+    if (this.disposed || this.transitions.size === 0) return;
+    const seconds = Math.max(0, Math.min(deltaSeconds, 0.1));
+    for (const [mesh, transition] of this.transitions) {
+      transition.elapsed += seconds;
+      const progress = Math.min(1, transition.elapsed / transition.duration);
+      const eased = smoothstep(progress);
+      mesh.material.opacity = transition.from + (transition.to - transition.from) * eased;
+      if (progress < 1) continue;
+      this.transitions.delete(mesh);
+      if (transition.to === 0) {
+        if (
+          transition.cacheKey !== undefined &&
+          !this.meshesByKey.has(transition.cacheKey) &&
+          this.maxCachedMeshes > 0
+        ) {
+          this.cacheMesh(transition.cacheKey, mesh);
+        } else {
+          this.disposeMesh(mesh);
+        }
+      } else {
+        mesh.material.opacity = 1;
+        mesh.material.transparent = false;
+      }
     }
   }
 
@@ -151,6 +195,8 @@ export class ChunkRenderer {
     this.cellColors = colors;
     for (const mesh of this.meshesByKey.values()) this.disposeMesh(mesh);
     for (const mesh of this.cachedMeshesByKey.values()) this.disposeMesh(mesh);
+    for (const mesh of this.transitions.keys()) this.disposeMesh(mesh);
+    this.transitions.clear();
     this.meshesByKey.clear();
     this.cachedMeshesByKey.clear();
     this.update(units);
@@ -159,6 +205,8 @@ export class ChunkRenderer {
   public dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    for (const mesh of this.transitions.keys()) this.disposeMesh(mesh);
+    this.transitions.clear();
     for (const mesh of this.meshesByKey.values()) this.disposeMesh(mesh);
     for (const mesh of this.cachedMeshesByKey.values()) this.disposeMesh(mesh);
     this.meshesByKey.clear();
@@ -220,6 +268,37 @@ export class ChunkRenderer {
     return mesh;
   }
 
+  private startFadeIn(mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>): void {
+    if (this.transitionDurationSeconds <= 0) return;
+    mesh.material.transparent = true;
+    mesh.material.opacity = 0;
+    this.transitions.set(mesh, {
+      duration: this.transitionDurationSeconds,
+      elapsed: 0,
+      from: 0,
+      to: 1,
+    });
+  }
+
+  private startFadeOut(
+    mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>,
+    cacheKey?: string,
+  ): void {
+    if (this.transitionDurationSeconds <= 0) {
+      this.disposeMesh(mesh);
+      return;
+    }
+    this.transitions.delete(mesh);
+    mesh.material.transparent = true;
+    this.transitions.set(mesh, {
+      duration: this.transitionDurationSeconds,
+      elapsed: 0,
+      from: mesh.material.opacity,
+      to: 0,
+      cacheKey,
+    });
+  }
+
   private createSubstrateMesh(): THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial> {
     const geometry = new THREE.IcosahedronGeometry(
       this.radius * SUBSTRATE_RADIUS_FACTOR,
@@ -249,6 +328,7 @@ export class ChunkRenderer {
   }
 
   private disposeMesh(mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>): void {
+    this.transitions.delete(mesh);
     this.group.remove(mesh);
     mesh.geometry.dispose();
     mesh.material.dispose();
@@ -259,11 +339,20 @@ export class ChunkRenderer {
     key: string,
     mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>,
   ): void {
-    this.group.remove(mesh);
     if (this.maxCachedMeshes <= 0) {
-      this.disposeMesh(mesh);
+      if (this.transitionDurationSeconds > 0) this.startFadeOut(mesh);
+      else this.disposeMesh(mesh);
       return;
     }
+    if (this.transitionDurationSeconds > 0) this.startFadeOut(mesh, key);
+    else this.cacheMesh(key, mesh);
+  }
+
+  private cacheMesh(
+    key: string,
+    mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>,
+  ): void {
+    this.group.remove(mesh);
     mesh.visible = false;
     this.cachedMeshesByKey.set(key, mesh);
     while (this.cachedMeshesByKey.size > this.maxCachedMeshes) {
@@ -282,6 +371,18 @@ export class ChunkRenderer {
     this.signaturesByUnit.set(unit, signature);
     return signature;
   }
+}
+
+interface Transition {
+  duration: number;
+  elapsed: number;
+  from: number;
+  to: number;
+  cacheKey?: string;
+}
+
+function smoothstep(value: number): number {
+  return value * value * (3 - 2 * value);
 }
 
 function unitToTopology(unit: VisibleUnit): GeodesicTopology {
