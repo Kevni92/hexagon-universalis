@@ -10,6 +10,10 @@ export interface GlobeControlsOptions {
   inertia?: boolean;
   damping?: number;
   zoomAdaptiveRotation?: boolean;
+  /** Maximale automatische Kameraneigung in der Nahansicht (Radiant). */
+  nearTilt?: number;
+  /** Anteil des Zoomwegs, ab dem die automatische Nahneigung einsetzt. */
+  nearTiltStart?: number;
 }
 
 interface PointerPosition {
@@ -25,6 +29,8 @@ const DEFAULTS = {
   rotateSpeed: 0.005,
   zoomSpeed: 0.002,
   zoomAdaptiveRotation: false,
+  nearTilt: THREE.MathUtils.degToRad(10),
+  nearTiltStart: 0.85,
 } as const;
 
 const PITCH_LIMIT = Math.PI / 2 - 0.01;
@@ -53,6 +59,20 @@ export class GlobeControls {
     if (this.options.minDistance >= this.options.maxDistance) {
       throw new RangeError('minDistance muss kleiner als maxDistance sein.');
     }
+    if (
+      !Number.isFinite(this.options.nearTilt) ||
+      this.options.nearTilt < 0 ||
+      this.options.nearTilt >= PITCH_LIMIT
+    ) {
+      throw new RangeError('Nahneigung muss endlich und kleiner als 90 Grad sein.');
+    }
+    if (
+      !Number.isFinite(this.options.nearTiltStart) ||
+      this.options.nearTiltStart < 0 ||
+      this.options.nearTiltStart >= 1
+    ) {
+      throw new RangeError('Start der Nahneigung muss im Intervall [0, 1) liegen.');
+    }
 
     this.setDistance(this.getCameraDistance() || this.options.minDistance);
     this.element.style.touchAction = 'none';
@@ -78,7 +98,7 @@ export class GlobeControls {
     const seconds = Math.max(0, Math.min(deltaSeconds, 0.1));
     this.yaw += this.velocityYaw * seconds;
     this.pitch = clamp(this.pitch + this.velocityPitch * seconds, -PITCH_LIMIT, PITCH_LIMIT);
-    this.applyRotation();
+    this.applyCameraFrame();
 
     const damping = Math.exp(-this.options.damping * seconds);
     this.velocityYaw *= damping;
@@ -168,11 +188,13 @@ export class GlobeControls {
       ? rotationScaleForDistance(this.getCameraDistance())
       : 1;
     const scaledRotateSpeed = this.options.rotateSpeed * distanceScale;
-    this.yaw += deltaX * scaledRotateSpeed;
+    // Keep the camera movement aligned with the pointer: dragging right
+    // moves the viewed globe to the right instead of mirroring the gesture.
+    this.yaw -= deltaX * scaledRotateSpeed;
     this.pitch = clamp(this.pitch + deltaY * scaledRotateSpeed, -PITCH_LIMIT, PITCH_LIMIT);
-    this.velocityYaw = (deltaX * scaledRotateSpeed) / deltaTime;
+    this.velocityYaw = (-deltaX * scaledRotateSpeed) / deltaTime;
     this.velocityPitch = (deltaY * scaledRotateSpeed) / deltaTime;
-    this.applyRotation();
+    this.applyCameraFrame();
   }
 
   private zoom(delta: number): void {
@@ -195,11 +217,33 @@ export class GlobeControls {
       0,
       clamp(distance, this.options.minDistance, this.options.maxDistance),
     );
-    this.camera.lookAt(0, 0, 0);
+    this.applyCameraFrame();
   }
 
-  private applyRotation(): void {
-    this.world.quaternion.setFromEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ')).normalize();
+  private applyCameraFrame(): void {
+    // The world stays in its canonical north-up frame. Dragging changes the
+    // camera orbit instead of accumulating a free roll on the globe.
+    this.world.quaternion.x = 0;
+    this.world.quaternion.y = 0;
+    this.world.quaternion.z = 0;
+    this.world.quaternion.w = 1;
+    const distance = this.getCameraDistance();
+    const zoomProgress = clamp(
+      (this.options.maxDistance - distance) / (this.options.maxDistance - this.options.minDistance),
+      0,
+      1,
+    );
+    const nearProgress = smoothstep(this.options.nearTiltStart, 1, zoomProgress);
+    const automaticTilt = this.options.nearTilt * nearProgress;
+    const latitude = clamp(this.pitch + automaticTilt, -PITCH_LIMIT, PITCH_LIMIT);
+    const cosLatitude = Math.cos(latitude);
+    this.camera.position.set(
+      distance * Math.sin(this.yaw) * cosLatitude,
+      distance * Math.sin(latitude),
+      distance * Math.cos(this.yaw) * cosLatitude,
+    );
+    this.camera.up?.set(0, 1, 0);
+    this.camera.lookAt(0, 0, 0);
   }
 
   private getPinchDistance(): number {
@@ -240,4 +284,11 @@ export function rotationScaleForDistance(
     throw new RangeError('Rotations-Distanzparameter sind ungültig.');
   const surfaceDistance = Math.max(0, distance - sphereRadius);
   return clamp(surfaceDistance / referenceSurfaceDistance, 0.08, 1);
+}
+
+function smoothstep(start: number, end: number, value: number): number {
+  if (value <= start) return 0;
+  if (value >= end) return 1;
+  const normalized = (value - start) / (end - start);
+  return normalized * normalized * (3 - 2 * normalized);
 }

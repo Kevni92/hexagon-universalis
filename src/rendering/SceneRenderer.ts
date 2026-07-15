@@ -100,7 +100,11 @@ export class SceneRenderer {
 
     this.scene.background = new THREE.Color(0x07111f);
     this.camera.position.set(0, 0, CAMERA.z);
-    this.scene.add(this.createHemisphereLight(), this.createKeyLight(), this.world);
+    // Keep the key light in camera space. The camera orbits around the
+    // north-stable globe, so a scene-fixed key light would appear to sweep
+    // across the surface during every drag.
+    this.camera.add(this.createKeyLight());
+    this.scene.add(this.createHemisphereLight(), this.world, this.camera);
 
     if (worldMode === 'procedural') {
       this.cellGlobe = null;
@@ -363,6 +367,15 @@ export class SceneRenderer {
       this.camera.position.y,
       this.camera.position.z,
     ).toFixed(2);
+    canvas.dataset.cameraTilt = Math.atan2(
+      this.camera.position.y,
+      Math.hypot(this.camera.position.x, this.camera.position.z),
+    ).toFixed(4);
+    const worldQuaternion = this.world.quaternion;
+    canvas.dataset.northUp =
+      Math.abs(worldQuaternion.x) + Math.abs(worldQuaternion.y) + Math.abs(worldQuaternion.z) < 1e-6
+        ? 'true'
+        : 'false';
     if (this.proceduralWorldLod !== null) {
       canvas.dataset.worldFingerprint = this.proceduralWorldLod.fingerprint;
       this.updateProceduralDetailsAndDiagnostics();

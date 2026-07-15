@@ -254,6 +254,7 @@ describe('SceneRenderer', () => {
     expect(testState.pixelRatio).toBe(2);
     expect(testState.size).toEqual([800, 600]);
     expect(renderer.camera.aspect).toBeCloseTo(4 / 3);
+    expect(renderer.camera.children).toHaveLength(1);
   });
 
   it('starts only one loop and disposes all resources', async () => {
