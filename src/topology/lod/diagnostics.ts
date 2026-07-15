@@ -14,8 +14,9 @@ export interface LodFocusDiagnostics {
 
 /**
  * Kompakte, serialisierbare Diagnose der räumlichen LOD-Auswahl. Sie verbindet
- * den zentralen Kamerastrahl mit den aktiven Parent-Chunks und dem Schwerpunkt
- * der feinsten sichtbaren Zellen, ohne Rendering- oder Three.js-Abhängigkeit.
+ * den zentralen Kamerastrahl mit den aktiven Parent-Chunks, dem Schwerpunkt und
+ * der nächstgelegenen Zelle der feinsten sichtbaren Stufe, ohne Rendering- oder
+ * Three.js-Abhängigkeit.
  */
 export function createLodFocusDiagnostics(
   camera: CameraState,
@@ -45,7 +46,9 @@ export function createLodFocusDiagnostics(
   );
   const finestUnits = units.filter((unit) => unit.level === finestLevel);
   const finestCells = finestUnits.flatMap((unit) => unit.cells);
-  const finestCentroid = normalizedCentroid(finestCells.map((cell) => cell.cell.center));
+  const finestCenters = finestCells.map((cell) => cell.cell.center);
+  const finestCentroid = normalizedCentroid(finestCenters);
+  const closestFocusAlignment = maximumAlignment(finestCenters, focusDirection);
 
   return {
     focusDirection,
@@ -55,8 +58,17 @@ export function createLodFocusDiagnostics(
     finestCellCount: finestCells.length,
     finestCentroid,
     finestAngularDistance:
-      finestCentroid === null ? null : Math.acos(clamp(dot(finestCentroid, focusDirection), -1, 1)),
+      closestFocusAlignment === null ? null : Math.acos(clamp(closestFocusAlignment, -1, 1)),
   };
+}
+
+function maximumAlignment(vectors: readonly Vector3[], focusDirection: Vector3): number | null {
+  let maximum: number | null = null;
+  for (const vector of vectors) {
+    const alignment = dot(vector, focusDirection);
+    if (maximum === null || alignment > maximum) maximum = alignment;
+  }
+  return maximum;
 }
 
 function normalizedCentroid(vectors: readonly Vector3[]): Vector3 | null {
