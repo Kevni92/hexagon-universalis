@@ -124,8 +124,24 @@ export function createCellGlobeGeometryData(
         at(cell.boundary, index),
         at(cell.boundary, nextIndex),
       );
-      appendTriangle(buffers, topFirst, baseFirst, baseSecond, outward, cell.id, sideColor);
-      appendTriangle(buffers, topFirst, baseSecond, topSecond, outward, cell.id, sideColor);
+      appendTriangle(
+        buffers,
+        topFirst,
+        baseFirst,
+        baseSecond,
+        outward,
+        cell.id,
+        sideColor,
+      );
+      appendTriangle(
+        buffers,
+        topFirst,
+        baseSecond,
+        topSecond,
+        outward,
+        cell.id,
+        sideColor,
+      );
       sideTriangleCount += 2;
     }
   }
@@ -203,7 +219,11 @@ function appendTriangle(
   buffers.cellIds.push(cellId);
 }
 
-function surfacePoint(boundary: Vector3, center: Vector3, surfaceMode: CellSurfaceMode): Vector3 {
+function surfacePoint(
+  boundary: Vector3,
+  center: Vector3,
+  surfaceMode: CellSurfaceMode,
+): Vector3 {
   if (surfaceMode === 'spherical') return boundary;
   const planeOffset = 1 - dot(boundary, center);
   return {
