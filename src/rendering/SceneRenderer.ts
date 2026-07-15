@@ -23,6 +23,8 @@ import {
 } from './ProceduralTerrain';
 
 const MAX_PIXEL_RATIO = 2;
+const LOD_AZIMUTH_STEP_RADIANS = THREE.MathUtils.degToRad(20);
+const LOD_ELEVATION_STEP_RADIANS = THREE.MathUtils.degToRad(30);
 const CAMERA = { fov: 45, near: 0.1, far: 100, z: 3.4 } as const;
 const SHOWCASE_TOPOLOGY_FREQUENCY = 2;
 const PROCEDURAL_LEVELS = ['global', 'regional', 'local'] as const;
@@ -397,14 +399,12 @@ export class SceneRenderer {
   private lodInputKey(): string {
     const camera = this.camera;
     const viewportHeight = this.container.clientHeight || 1;
+    const distance = Math.hypot(camera.position.x, camera.position.y, camera.position.z);
+    const horizontalDistance = Math.hypot(camera.position.x, camera.position.z);
     const common = [
-      camera.position.x,
-      camera.position.y,
-      camera.position.z,
-      camera.quaternion.x,
-      camera.quaternion.y,
-      camera.quaternion.z,
-      camera.quaternion.w,
+      Math.round(distance * 1000) / 1000,
+      quantizeAngle(Math.atan2(camera.position.x, camera.position.z), LOD_AZIMUTH_STEP_RADIANS),
+      quantizeAngle(Math.atan2(camera.position.y, horizontalDistance), LOD_ELEVATION_STEP_RADIANS),
       camera.fov,
       camera.aspect,
       viewportHeight,
@@ -512,6 +512,10 @@ export class SceneRenderer {
       })
       .catch(() => undefined);
   }
+}
+
+function quantizeAngle(angle: number, stepRadians: number): number {
+  return Math.round(angle / stepRadians);
 }
 
 function formatVector(
