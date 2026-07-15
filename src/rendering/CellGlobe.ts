@@ -124,24 +124,8 @@ export function createCellGlobeGeometryData(
         at(cell.boundary, index),
         at(cell.boundary, nextIndex),
       );
-      appendTriangle(
-        buffers,
-        topFirst,
-        baseFirst,
-        baseSecond,
-        outward,
-        cell.id,
-        sideColor,
-      );
-      appendTriangle(
-        buffers,
-        topFirst,
-        baseSecond,
-        topSecond,
-        outward,
-        cell.id,
-        sideColor,
-      );
+      appendTriangle(buffers, topFirst, baseFirst, baseSecond, outward, cell.id, sideColor);
+      appendTriangle(buffers, topFirst, baseSecond, topSecond, outward, cell.id, sideColor);
       sideTriangleCount += 2;
     }
   }
@@ -219,11 +203,7 @@ function appendTriangle(
   buffers.cellIds.push(cellId);
 }
 
-function surfacePoint(
-  boundary: Vector3,
-  center: Vector3,
-  surfaceMode: CellSurfaceMode,
-): Vector3 {
+function surfacePoint(boundary: Vector3, center: Vector3, surfaceMode: CellSurfaceMode): Vector3 {
   if (surfaceMode === 'spherical') return boundary;
   const planeOffset = 1 - dot(boundary, center);
   return {
@@ -269,9 +249,7 @@ function resolvedRadius(
   return value;
 }
 
-function resolvePodiumOptions(
-  options?: CellPodiumOptions,
-): ResolvedCellPodiumOptions | undefined {
+function resolvePodiumOptions(options?: CellPodiumOptions): ResolvedCellPodiumOptions | undefined {
   if (options === undefined) return undefined;
   const topInset = options.topInset ?? 0.96;
   const sideColorFactor = options.sideColorFactor ?? 0.62;
@@ -298,11 +276,19 @@ function normalize(vector: Vector3): Vector3 {
 }
 
 function add(first: Vector3, second: Vector3): Vector3 {
-  return { x: first.x + second.x, y: first.y + second.y, z: first.z + second.z };
+  return {
+    x: first.x + second.x,
+    y: first.y + second.y,
+    z: first.z + second.z,
+  };
 }
 
 function subtract(first: Vector3, second: Vector3): Vector3 {
-  return { x: first.x - second.x, y: first.y - second.y, z: first.z - second.z };
+  return {
+    x: first.x - second.x,
+    y: first.y - second.y,
+    z: first.z - second.z,
+  };
 }
 
 function scale(vector: Vector3, factor: number): Vector3 {
