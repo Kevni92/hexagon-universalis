@@ -36,9 +36,7 @@ describe('prozeduraler LOD-Kamerafokus', () => {
     for (const sample of samples) {
       expect(sample.maximumLevel).toBe(2);
       expect(sample.diagnostics.focusDirection).toEqual(reference.diagnostics.focusDirection);
-      expect(sample.diagnostics.regionalParentIds).toEqual(
-        reference.diagnostics.regionalParentIds,
-      );
+      expect(sample.diagnostics.regionalParentIds).toEqual(reference.diagnostics.regionalParentIds);
       expect(sample.diagnostics.localParentIds).toEqual(reference.diagnostics.localParentIds);
       expect(sample.diagnostics.finestAngularDistance).not.toBeNull();
       expect(sample.diagnostics.finestAngularDistance ?? Infinity).toBeLessThan(0.2);
@@ -51,22 +49,18 @@ describe('prozeduraler LOD-Kamerafokus', () => {
     const frontDiagnostics = createLodFocusDiagnostics(frontState, world.update(frontState));
 
     const rotatedState = camera(normalize({ x: 0.65, y: 0.1, z: 0.75 }), 1.18);
-    const rotatedDiagnostics = createLodFocusDiagnostics(
-      rotatedState,
-      world.update(rotatedState),
-    );
+    const rotatedDiagnostics = createLodFocusDiagnostics(rotatedState, world.update(rotatedState));
 
-    expect(rotatedDiagnostics.focusDirection.x).toBeGreaterThan(
-      frontDiagnostics.focusDirection.x,
-    );
-    expect(rotatedDiagnostics.regionalParentIds).not.toEqual(
-      frontDiagnostics.regionalParentIds,
-    );
+    expect(rotatedDiagnostics.focusDirection.x).toBeGreaterThan(frontDiagnostics.focusDirection.x);
+    expect(rotatedDiagnostics.regionalParentIds).not.toEqual(frontDiagnostics.regionalParentIds);
     expect(rotatedDiagnostics.finestAngularDistance ?? Infinity).toBeLessThan(0.2);
   });
 });
 
-function camera(direction: { readonly x: number; readonly y: number; readonly z: number }, distance: number): CameraState {
+function camera(
+  direction: { readonly x: number; readonly y: number; readonly z: number },
+  distance: number,
+): CameraState {
   const normalized = normalize(direction);
   return {
     position: {
