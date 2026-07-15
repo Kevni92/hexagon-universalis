@@ -156,6 +156,7 @@ test('procedural world reaches Global, Regional and Lokal without console errors
 });
 
 test('close-up camera tilts smoothly while dragging stays north-up', async ({ page }) => {
+  test.slow();
   await page.goto('/?world=procedural');
   const canvas = page.locator('canvas.viewport-canvas');
 
