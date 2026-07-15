@@ -189,6 +189,7 @@ const testState = {
   rendererCount: 0,
   rendererDisposed: false,
   size: [0, 0] as [number, number],
+  frameCallbacks: [] as Array<(time: number) => void>,
 };
 
 describe('SceneRenderer', () => {
@@ -202,6 +203,7 @@ describe('SceneRenderer', () => {
       rendererCount: 0,
       rendererDisposed: false,
       size: [0, 0],
+      frameCallbacks: [],
     });
 
     vi.stubGlobal('window', {
@@ -225,7 +227,10 @@ describe('SceneRenderer', () => {
     vi.spyOn(globalThis.performance, 'now').mockReturnValue(100);
     vi.stubGlobal(
       'requestAnimationFrame',
-      vi.fn(() => 1),
+      vi.fn((callback: (time: number) => void) => {
+        testState.frameCallbacks.push(callback);
+        return testState.frameCallbacks.length;
+      }),
     );
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
   });
@@ -369,5 +374,32 @@ describe('SceneRenderer', () => {
       cellCount: 2562,
       seed: 'after',
     });
+  });
+
+  it('überspringt 120 stationäre Frames und reine prozedurale Rotation im LOD-Pfad', async () => {
+    const { SceneRenderer } = await import('@/rendering/SceneRenderer');
+    const container = {
+      clientWidth: 800,
+      clientHeight: 600,
+      append: vi.fn(),
+    } as unknown as HTMLElement;
+    const renderer = new SceneRenderer(container, 'procedural', undefined, undefined, {
+      config: { density: 'low' },
+    });
+    const initial = renderer.proceduralRuntimeStats;
+    renderer.start();
+
+    for (let frame = 1; frame <= 120; frame += 1) {
+      const callback = testState.frameCallbacks.shift();
+      if (callback === undefined) throw new Error('missing animation frame');
+      callback(100 + frame * 16);
+    }
+    renderer.world.quaternion.x = 0.25;
+    const rotationFrame = testState.frameCallbacks.shift();
+    if (rotationFrame === undefined) throw new Error('missing rotation frame');
+    rotationFrame(2_100);
+
+    expect(renderer.proceduralRuntimeStats).toEqual(initial);
+    renderer.dispose();
   });
 });

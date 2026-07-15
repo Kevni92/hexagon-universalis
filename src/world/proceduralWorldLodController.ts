@@ -14,6 +14,13 @@ export class ProceduralWorldLodController {
     return this.controller.update(camera);
   }
 
+  public get cacheStats(): {
+    readonly cachedTopologies: number;
+    readonly topologyBuilds: number;
+  } {
+    return this.controller.cacheStats;
+  }
+
   public reset(): void {
     this.controller.reset();
   }

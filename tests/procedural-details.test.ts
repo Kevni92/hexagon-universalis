@@ -113,4 +113,28 @@ describe('prozedurale Detaildarstellung', () => {
     expect(renderer.activeDrawCallCount).toBe(0);
     expect(renderer.group.children).toHaveLength(0);
   });
+
+  it('blendet denselben lokalen Detailzustand aus und ohne Neubau wieder ein', () => {
+    const local = unit(2);
+    const global = unit(0);
+    const renderer = new ProceduralDetailRenderer();
+    const lookup = lookupFor(local);
+
+    renderer.update([local], lookup, 'stable-world');
+    const mesh = renderer.group.children[0];
+    const localInstances = renderer.activeInstanceCount;
+    renderer.update([global], lookup, 'stable-world');
+    expect(renderer.activeInstanceCount).toBe(0);
+    expect(renderer.activeDrawCallCount).toBe(0);
+    expect(renderer.cacheStats).toMatchObject({ cachedStates: 1, detailBuilds: 1 });
+
+    renderer.update([local], lookup, 'stable-world');
+    expect(renderer.group.children[0]).toBe(mesh);
+    expect(renderer.activeInstanceCount).toBe(localInstances);
+    expect(renderer.cacheStats).toMatchObject({ detailBuilds: 1, detailDisposals: 0 });
+
+    renderer.update([global], lookup, 'changed-world');
+    expect(renderer.cacheStats.cachedStates).toBe(0);
+    expect(renderer.cacheStats.detailDisposals).toBeGreaterThan(0);
+  });
 });

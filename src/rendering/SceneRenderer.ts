@@ -46,6 +46,18 @@ export interface ProceduralRendererOptions {
   readonly onStateChange?: (state: ProceduralRendererState) => void;
 }
 
+export interface ProceduralRuntimeStats {
+  readonly lodUpdates: number;
+  readonly cachedTopologies: number;
+  readonly topologyBuilds: number;
+  readonly cachedChunkMeshes: number;
+  readonly geometryBuilds: number;
+  readonly geometryDisposals: number;
+  readonly cachedDetailStates: number;
+  readonly detailBuilds: number;
+  readonly detailDisposals: number;
+}
+
 export class SceneRenderer {
   public readonly scene = new THREE.Scene();
   public readonly camera = new THREE.PerspectiveCamera(CAMERA.fov, 1, CAMERA.near, CAMERA.far);
@@ -70,6 +82,8 @@ export class SceneRenderer {
   private proceduralRequestId = 0;
   private lastProceduralStateKey = '';
   private lastProceduralDiagnosticsFingerprint = '';
+  private lastLodInputKey = '';
+  private lodUpdateCount = 0;
 
   public constructor(
     private readonly container: HTMLElement,
@@ -105,6 +119,7 @@ export class SceneRenderer {
             proceduralWorldLod.sampleAt(position).elevation;
           return proceduralSurfaceRadius(elevation, PROCEDURAL_LEVELS[level]);
         },
+        3,
       );
       this.proceduralDetails = new ProceduralDetailRenderer();
       this.world.add(this.chunkRenderer.group, this.proceduralDetails.group);
@@ -182,6 +197,29 @@ export class SceneRenderer {
     return PROCEDURAL_LEVELS[depth] ?? null;
   }
 
+  public get proceduralRuntimeStats(): ProceduralRuntimeStats | null {
+    if (
+      this.proceduralWorldLod === null ||
+      this.chunkRenderer === null ||
+      this.proceduralDetails === null
+    )
+      return null;
+    const topology = this.proceduralWorldLod.cacheStats;
+    const chunks = this.chunkRenderer.cacheStats;
+    const details = this.proceduralDetails.cacheStats;
+    return {
+      lodUpdates: this.lodUpdateCount,
+      cachedTopologies: topology.cachedTopologies,
+      topologyBuilds: topology.topologyBuilds,
+      cachedChunkMeshes: chunks.cachedMeshes,
+      geometryBuilds: chunks.geometryBuilds,
+      geometryDisposals: chunks.geometryDisposals,
+      cachedDetailStates: details.cachedStates,
+      detailBuilds: details.detailBuilds,
+      detailDisposals: details.detailDisposals,
+    };
+  }
+
   public get proceduralState(): ProceduralRendererState | null {
     if (this.proceduralWorldLod === null) return null;
     const profile = this.proceduralWorldLod.profile;
@@ -211,6 +249,7 @@ export class SceneRenderer {
     this.proceduralWorldLod.reconfigure(config);
     this.updateLod();
     this.chunkRenderer.setCellColors(this.proceduralWorldLod.cellColors, this.visibleUnits);
+    this.publishProceduralWorkDiagnostics();
     const next = this.proceduralState;
     if (next === null) throw new Error('Die prozedurale Testwelt ist nicht aktiv.');
     return next;
@@ -290,6 +329,10 @@ export class SceneRenderer {
   private updateLod(): void {
     if ((this.worldLod === null && this.proceduralWorldLod === null) || this.chunkRenderer === null)
       return;
+    const inputKey = this.lodInputKey();
+    if (inputKey === this.lastLodInputKey) return;
+    this.lastLodInputKey = inputKey;
+    this.lodUpdateCount += 1;
     const cameraState = computeLocalCameraState({
       worldQuaternion: this.world.quaternion,
       cameraPosition: this.camera.position,
@@ -324,8 +367,50 @@ export class SceneRenderer {
       canvas.dataset.worldFingerprint = this.proceduralWorldLod.fingerprint;
       this.updateProceduralDetailsAndDiagnostics();
       this.emitProceduralState();
+      this.publishProceduralWorkDiagnostics();
     }
     this.requestVisibleEarthData();
+  }
+
+  private lodInputKey(): string {
+    const camera = this.camera;
+    const viewportHeight = this.container.clientHeight || 1;
+    const common = [
+      camera.position.x,
+      camera.position.y,
+      camera.position.z,
+      camera.quaternion.x,
+      camera.quaternion.y,
+      camera.quaternion.z,
+      camera.quaternion.w,
+      camera.fov,
+      camera.aspect,
+      viewportHeight,
+    ];
+    if (this.proceduralWorldLod !== null)
+      return JSON.stringify([...common, this.proceduralWorldLod.fingerprint]);
+    return JSON.stringify([
+      ...common,
+      this.world.quaternion.x,
+      this.world.quaternion.y,
+      this.world.quaternion.z,
+      this.world.quaternion.w,
+    ]);
+  }
+
+  private publishProceduralWorkDiagnostics(): void {
+    const stats = this.proceduralRuntimeStats;
+    if (stats === null) return;
+    const canvas = this.renderer.domElement;
+    canvas.dataset.lodUpdates = String(stats.lodUpdates);
+    canvas.dataset.lodCachedTopologies = String(stats.cachedTopologies);
+    canvas.dataset.lodTopologyBuilds = String(stats.topologyBuilds);
+    canvas.dataset.chunkCachedMeshes = String(stats.cachedChunkMeshes);
+    canvas.dataset.chunkGeometryBuilds = String(stats.geometryBuilds);
+    canvas.dataset.chunkGeometryDisposals = String(stats.geometryDisposals);
+    canvas.dataset.detailCachedStates = String(stats.cachedDetailStates);
+    canvas.dataset.detailBuilds = String(stats.detailBuilds);
+    canvas.dataset.detailDisposals = String(stats.detailDisposals);
   }
 
   private updateProceduralDetailsAndDiagnostics(): void {

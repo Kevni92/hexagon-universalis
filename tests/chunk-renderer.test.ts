@@ -244,4 +244,33 @@ describe('ChunkRenderer', () => {
     renderer.dispose();
     expect(() => renderer.update(unitsFromPatchCells(1))).toThrow();
   });
+
+  it('reuses a bounded cache of three full-world LOD meshes across zoom cycles', () => {
+    const renderer = new ChunkRenderer(1, undefined, undefined, 3);
+    const patch = createGlobalPatch(4);
+    const units = ([0, 1, 2] as const).map((level) => ({
+      key: `level-${level}`,
+      level,
+      cells: patch.cells,
+    }));
+    const identities = new Map<string, THREE.Mesh>();
+
+    for (const unit of units) {
+      renderer.update([unit]);
+      identities.set(unit.key, renderer.meshes[0]!);
+    }
+    for (let cycle = 0; cycle < 10; cycle += 1)
+      for (const unit of units) {
+        renderer.update([unit]);
+        expect(renderer.meshes[0]).toBe(identities.get(unit.key));
+      }
+
+    expect(renderer.cacheStats).toEqual({
+      cachedMeshes: 2,
+      geometryBuilds: 3,
+      geometryDisposals: 0,
+    });
+    renderer.dispose();
+    expect(renderer.cacheStats.geometryDisposals).toBe(3);
+  });
 });

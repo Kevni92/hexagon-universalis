@@ -45,6 +45,19 @@ Für Diagnose und Playwright-Abnahme veröffentlicht das Canvas folgende Werte:
 - `data-lod-finest-cell-count`
 - `data-lod-finest-centroid`
 - `data-lod-focus-angle`
+- `data-lod-updates`
+- `data-lod-cached-topologies`
+- `data-lod-topology-builds`
+- `data-chunk-cached-meshes`
+- `data-chunk-geometry-builds`
+- `data-chunk-geometry-disposals`
+- `data-detail-cached-states`
+- `data-detail-builds`
+- `data-detail-disposals`
+
+Die Arbeitszähler sind monoton und zeitunabhängig. Stationäre Frames sowie reine Weltrotation
+verändern sie nicht, weil die prozedurale Stufenauswahl ausschließlich Kameradistanz, Sichtfeld
+und Viewportmaß benötigt. Damit prüfen Tests reale Arbeit statt instabiler Runner-FPS.
 
 ## Dichte-, Schwellen- und Budgetprofile
 
@@ -61,22 +74,54 @@ Die Werte vor und nach dem Schrägstrich sind Einschalt- und Ausschaltschwelle d
 normiert auf eine Referenz-Viewporthöhe von 720 Pixeln. Dadurch liegen die Stufenwechsel auf
 Desktop und mobilen Hochformaten bei denselben Kameradistanzen.
 
-Regional und Lokal werden erst beim Erreichen ihrer Schwelle erzeugt. Es ist stets genau eine
-vollständige Stufe aktiv und zu einem Zellflächen-Draw-Call gebündelt. `max. aktive Zellen` ist
-daher die größte einzelne Topologie statt der Summe aller drei Stufen.
+Regional und Lokal werden erst beim erstmaligen Erreichen ihrer Schwelle erzeugt. Danach bleiben
+genau drei vollständige Topologien und drei zugehörige Weltmeshes (eins aktiv, höchstens zwei
+inaktiv) für Zoomzyklen resident. Es ist stets genau eine vollständige Stufe sichtbar und zu einem
+Zellflächen-Draw-Call gebündelt. `max. aktive Zellen` ist daher weiterhin die größte einzelne
+sichtbare Topologie; der Cache ist unabhängig von der Zahl der Interaktionen konstant begrenzt.
+Projektionen und Farben werden pro Stufe ebenfalls wiederverwendet und bei Welt- oder
+Dichtewechsel vollständig invalidiert.
 
 Die Pointerrotation ist im prozeduralen Modus ebenfalls zoomadaptiv. Maßgeblich ist der Abstand
 zwischen Kamera und Kugeloberfläche relativ zur Startansicht bei `3.4`: Dort gilt Faktor `1`, bei
 Distanz `2.2` ungefähr `0.5` und im Nahbereich `1.2` der begrenzte Faktor `0.08`. Derselbe Faktor
 gilt für die beim Loslassen übernommene Trägheitsgeschwindigkeit.
 
+Lokale Detailinstanzen bleiben für genau einen Weltfingerprint im Speicher und werden außerhalb
+des Lokal-LOD nur ausgeblendet. Global und Regional melden deshalb weiterhin null aktive
+Detailinstanzen und -Draw-Calls. Ein anderer Weltfingerprint verwirft diesen einzelnen Zustand.
+
 Ungültige Seeds, Dichten und Generatorparameter werden vor der Welt- oder
-Topologiematerialisierung abgelehnt. Ein Seed-/Parameterwechsel leert nur den fachlichen
-Projektionscache. Ein Dichtewechsel ersetzt zusätzlich den Topologie- und Hysteresecontroller.
-`dispose()` leert beide Cachearten. Die Generationsnummer erlaubt späteren asynchronen UI-Aufrufern,
-veraltete Ergebnisse zu erkennen; die heutige Generierung selbst ist synchron.
+Topologiematerialisierung abgelehnt. Ein Seed-/Parameterwechsel leert fachliche Projektionen,
+Farben, Weltmeshes und Details. Ein Dichtewechsel ersetzt zusätzlich den Topologie- und
+Hysteresecontroller. `dispose()` leert alle Cachearten. Die Generationsnummer erlaubt späteren
+asynchronen UI-Aufrufern, veraltete Ergebnisse zu erkennen; die heutige Generierung selbst ist
+synchron.
 
 ## Abnahme
+
+### Referenzprofil für Issue #89
+
+Der lokale Referenzlauf vom 15. Juli 2026 verwendete einen Intel Core i7-8750H, eine NVIDIA
+GeForce GTX 1060, Chromium 149.0.7827.55, 1920 × 1080, Seed `fgh` und Dichte `high`. Da der
+automatisierte Browser headless läuft und der verfügbare Grafikpfad virtualisiert sein kann,
+werden daraus keine hardwareunabhängigen FPS-Grenzen abgeleitet. Die reproduzierbaren
+Arbeitszähler zeigen für 120 stationäre Frames und anschließend zehn Regional-/Lokal-Zyklen:
+
+| Arbeit nach initialem Lokal-Warm-up     | Vor #89 | Nach #89 |
+| --------------------------------------- | ------: | -------: |
+| zusätzliche LOD-Updates, 120 Ruheframes |     120 |        0 |
+| Topologieaufbauten, Warm-up + 10 Zyklen |      13 |        3 |
+| Geometrieaufbauten, Warm-up + 10 Zyklen |      22 |        3 |
+| Geometriefreigaben während der Zyklen   |      20 |        0 |
+| Detailaufbauten, Warm-up + 10 Zyklen    |      11 |        1 |
+| Detailfreigaben während der Zyklen      |      10 |        0 |
+
+Reine Weltrotation verursacht nach dem Warm-up ebenfalls null zusätzliche LOD-, Geometrie- oder
+Detailarbeit. Der sichtbare Zustand bleibt bei einem Weltmesh plus Substrat und höchstens zwölf
+Detail-Draw-Calls innerhalb des Gesamtbudgets von 16. Alle drei Topologien und Weltmeshes sowie
+genau ein lokaler Detailzustand bilden die feste obere Cachegrenze; `dispose()` gibt sie komplett
+frei.
 
 Visuelle Referenzen für Seed `fgh` und Dichte `standard`:
 
@@ -88,5 +133,9 @@ Automatisierte Tests decken alle drei erreichbaren Stufen, deterministische stuf
 Referenzwerte, die zentrale Strahl-Kugel-Schnittberechnung, Pixelhysterese, viewportweit exklusive
 Stufen, flaches Global-LOD, detailfreies Regional-LOD, qualifizierte Picking-IDs,
 Cacheinvalidierung und Dispose ab. Der Playwright-Test verwendet Seed `fgh`, Dichte `high`,
-Lokal-LOD und eine Zoomsequenz ohne Rotation. Start- und Endaufnahme werden im Testbericht
-angehängt; Stufe, vollständige Topologie und Fokusdiagnose müssen stabil bleiben.
+Lokal-LOD, eine stationäre Ruhephase, reine Rotation und kontrolliertes Nahbereichszoomen. Drei
+vollständige WebGL-Zoomzyklen laufen mit niedriger Dichte, damit parallele SwiftShader-Kontexte den
+Runner nicht verfälschen. Die zeitunabhängigen Regressionen führen zusätzlich 120 stationäre
+Frames und zehn Zyklen aus. Start- und Endaufnahme werden im Testbericht angehängt; Stufe,
+vollständige Topologie, Fokusdiagnose und die deterministischen Arbeitsbudgets müssen stabil
+bleiben.
