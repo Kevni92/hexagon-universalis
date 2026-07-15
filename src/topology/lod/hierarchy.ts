@@ -126,6 +126,11 @@ export function createChildPatch(
  * Zellen, deren Zentrum per Nächste-Zentren-Zuordnung tatsächlich der
  * gegebenen Elternzelle zugeordnet ist, werden übernommen; alle anderen
  * (einschließlich der meisten der 12 Patch-Pentagone) werden verworfen.
+ *
+ * `parentCellIndex` bleibt die stabile ID der Elternzelle. `assignmentIndex`
+ * bezeichnet dagegen ihre Position in der übergebenen Zentrenliste. Bei
+ * verschachtelten Chunks ist diese Liste bereits gefiltert und ihre lokalen
+ * Positionen stimmen daher nicht zwingend mit den stabilen Zell-IDs überein.
  */
 export function materializeChunk(
   patch: LodPatch,
@@ -133,11 +138,14 @@ export function materializeChunk(
   parentCenters: readonly Vector3[],
   parentCenter: Vector3,
   parentCellRadius: number,
+  assignmentIndex = parentCellIndex,
 ): LodChunk {
   if (patch.parentIndex === null || patch.level.depth === 0)
     throw new RangeError('Level 0 wird nicht gechunkt.');
+  if (assignmentIndex < 0 || assignmentIndex >= parentCenters.length)
+    throw new RangeError('assignmentIndex liegt außerhalb der Elternzentren.');
   const assignedCells = patch.cells.filter(
-    (lodCell) => nearestParentIndex(lodCell.cell.center, parentCenters) === parentCellIndex,
+    (lodCell) => nearestParentIndex(lodCell.cell.center, parentCenters) === assignmentIndex,
   );
   const id = createChunkId(patch.level, parentCellIndex);
   return {
@@ -167,12 +175,14 @@ export function createChunkForParent(
 ): LodChunk {
   const patch = createChildPatch(levelName, depth, parentCell.id.index, frequency);
   const parentCellRadius = estimateCellRadius(parentCell.cell);
+  const assignmentIndex = nearestParentIndex(parentCell.cell.center, allParentCenters);
   return materializeChunk(
     patch,
     parentCell.id.index,
     allParentCenters,
     parentCell.cell.center,
     parentCellRadius,
+    assignmentIndex,
   );
 }
 
