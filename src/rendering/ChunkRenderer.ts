@@ -8,11 +8,15 @@ export type ChunkSurfaceRadius = (position: Vector3, level: 0 | 1 | 2, cellId: s
 
 const PODIUM_BASE_RADIUS_FACTOR = 0.975;
 const PODIUM_INSET_BY_LEVEL = [0.99, 0.97, 0.94] as const;
+const SUBSTRATE_RADIUS_FACTOR = 0.974;
+const SUBSTRATE_DETAIL = 4;
 
 /**
  * Rendert eine stabile Liste sichtbarer Zell-Chunks (`VisibleUnit[]`) als
  * ein Three.js-Mesh pro Chunk – kein Mesh und kein Material pro Zelle, kein
  * einzelnes Voll-Welt-Mesh (siehe ADR 0001 / #58 "Rendering-Schnittstelle").
+ * Reliefdarstellungen erhalten zusätzlich genau einen inneren Planetenkörper,
+ * damit LOD-Nähte und Podestzwischenräume nie den Szenenhintergrund zeigen.
  * `update()` fügt neue Chunks hinzu, entfernt nicht mehr sichtbare Chunks
  * und lässt unveränderte Chunks unangetastet (differenzielles Update).
  * `dispose()` gibt alle Geometrien und Materialien vollständig frei.
@@ -24,6 +28,10 @@ export class ChunkRenderer {
     string,
     THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>
   >();
+  private readonly substrateMesh: THREE.Mesh<
+    THREE.BufferGeometry,
+    THREE.MeshStandardMaterial
+  > | null;
   private disposed = false;
 
   public constructor(
@@ -32,11 +40,17 @@ export class ChunkRenderer {
     private readonly surfaceRadius?: ChunkSurfaceRadius,
   ) {
     this.group.name = 'chunk-renderer';
+    this.substrateMesh = surfaceRadius === undefined ? null : this.createSubstrateMesh();
+    if (this.substrateMesh !== null) this.group.add(this.substrateMesh);
   }
 
-  /** Anzahl aktuell aktiver (gerenderter) Chunks – entspricht der Draw-Call-Zahl dieses Renderers. */
+  /** Anzahl aktiver Flächen-Draw-Calls einschließlich des optionalen Planetenkörpers. */
   public get activeChunkCount(): number {
-    return this.meshesByKey.size;
+    return this.meshesByKey.size + this.activeSubstrateDrawCallCount;
+  }
+
+  public get activeSubstrateDrawCallCount(): number {
+    return this.substrateMesh === null ? 0 : 1;
   }
 
   /** Gesamtzahl aktuell materialisierter Zellen über alle aktiven Chunks. */
@@ -113,6 +127,7 @@ export class ChunkRenderer {
     this.disposed = true;
     for (const mesh of this.meshesByKey.values()) this.disposeMesh(mesh);
     this.meshesByKey.clear();
+    if (this.substrateMesh !== null) this.disposeMesh(this.substrateMesh);
     this.group.clear();
   }
 
@@ -127,7 +142,7 @@ export class ChunkRenderer {
         : {
             baseRadius: this.radius * PODIUM_BASE_RADIUS_FACTOR,
             topInset: PODIUM_INSET_BY_LEVEL[unit.level],
-            sideColorFactor: 0.62,
+            sideColorFactor: 0.76,
           };
     const data = createCellGlobeGeometryData(
       topology,
@@ -164,6 +179,28 @@ export class ChunkRenderer {
     mesh.userData.sideTriangleCount = data.sideTriangleCount;
     mesh.userData.level = unit.level;
     mesh.userData.unitSignature = unitSignature(unit);
+    return mesh;
+  }
+
+  private createSubstrateMesh(): THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial> {
+    const geometry = new THREE.IcosahedronGeometry(
+      this.radius * SUBSTRATE_RADIUS_FACTOR,
+      SUBSTRATE_DETAIL,
+    );
+    const material = new THREE.MeshStandardMaterial({
+      color: 0x496a7a,
+      emissive: 0x132b3b,
+      emissiveIntensity: 0.35,
+      flatShading: true,
+      roughness: 1,
+      metalness: 0,
+      side: THREE.FrontSide,
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.name = 'procedural-planet-substrate';
+    mesh.renderOrder = -1;
+    mesh.raycast = () => {};
+    mesh.userData.radius = this.radius * SUBSTRATE_RADIUS_FACTOR;
     return mesh;
   }
 
