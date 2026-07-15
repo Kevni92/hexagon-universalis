@@ -18,6 +18,7 @@ import {
 } from './proceduralWorld';
 
 export type ProceduralWorldLodLevel = 'global' | 'regional' | 'local';
+export type ProceduralCellColor = (cell: ProceduralWorldCell) => string;
 
 export interface ProceduralLodBudgetProfile {
   readonly density: ProceduralDensityProfileId;
@@ -120,7 +121,10 @@ export class ProceduralWorldLod {
   private generation = 1;
   private disposed = false;
 
-  public constructor(config: Partial<ProceduralWorldConfig> = {}) {
+  public constructor(
+    config: Partial<ProceduralWorldConfig> = {},
+    private readonly colorForCell: ProceduralCellColor = defaultProceduralCellColor,
+  ) {
     this.configValue = normalizeProceduralWorldConfig(config);
     this.referenceWorld = createProceduralWorld(this.configValue);
     this.controller = new SelectiveOverlayWorldLodController(this.profile.quality);
@@ -172,7 +176,7 @@ export class ProceduralWorldLod {
           relief: source.relief,
         };
         this.projectedById.set(id, projected);
-        this.colorsById.set(id, TILE_PROFILES[source.tileType].color);
+        this.colorsById.set(id, this.colorForCell(source));
       }
     }
     this.pruneProjectionCache(units);
@@ -249,6 +253,10 @@ export function validateProceduralLodProfiles(): void {
     if (profile.maxDrawCalls !== 3 || profile.maxActiveCells < totalCells)
       throw new RangeError(`Ungültiges Laufzeitbudget für ${density}.`);
   }
+}
+
+function defaultProceduralCellColor(cell: ProceduralWorldCell): string {
+  return TILE_PROFILES[cell.tileType].color;
 }
 
 function nearestWorldCell(
