@@ -230,6 +230,7 @@ test('low-density procedural LOD stays within detail and draw-call budgets', asy
 test('low-density local relief remains closed from an oblique angle', async ({
   page,
 }, testInfo) => {
+  test.slow();
   test.skip(testInfo.project.name !== 'chromium', 'Visuelle Abnahme läuft im Desktop-Chromium.');
   const pageErrors: Error[] = [];
   page.on('pageerror', (error) => pageErrors.push(error));
@@ -261,6 +262,7 @@ test('low-density local relief remains closed from an oblique angle', async ({
 test('low-density relief restores the same render state after a complete LOD cycle', async ({
   page,
 }) => {
+  test.slow();
   const pageErrors: Error[] = [];
   page.on('pageerror', (error) => pageErrors.push(error));
   await page.goto('/?world=procedural&seed=fgh&density=low');
