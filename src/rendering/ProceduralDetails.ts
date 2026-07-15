@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 
 import type { GeodesicCell, Vector3 } from '@/topology/geodesic';
+import type { LodCell } from '@/topology/lod/hierarchy';
 import { visibleCellId, type VisibleUnit } from '@/topology/lod/WorldLod';
 import type { ProceduralLodCell, ProceduralWorldLodLevel } from '@/world/proceduralWorldLod';
 
@@ -30,6 +31,13 @@ export interface ProceduralDetailPlacement extends DetailInstance {
 
 export type ProceduralCellLookup = (cellId: string) => ProceduralLodCell | undefined;
 
+interface ProjectedEntry {
+  readonly lodCell: LodCell;
+  readonly cellId: string;
+  readonly projected: ProceduralLodCell;
+  readonly cellRadius: number;
+}
+
 const DETAIL_COLORS: Readonly<Record<DetailType, number>> = {
   deciduousTree: 0x3f7d42,
   conifer: 0x254f38,
@@ -54,10 +62,8 @@ export function createProceduralDetailPlan(
   const placements: ProceduralDetailPlacement[] = [];
   const append = (
     detail: DetailInstance,
-    cellId: string,
+    entry: ProjectedEntry,
     level: ProceduralWorldLodLevel,
-    cell: GeodesicCell,
-    elevation: number,
     transition: boolean,
   ): void => {
     const count = used.get(detail.detailType) ?? 0;
@@ -65,11 +71,11 @@ export function createProceduralDetailPlan(
     used.set(detail.detailType, count + 1);
     placements.push({
       ...detail,
-      cellId,
+      cellId: entry.cellId,
       level,
-      center: cell.center,
-      cellRadius: meanCellRadius(cell),
-      elevation,
+      center: entry.lodCell.cell.center,
+      cellRadius: entry.cellRadius,
+      elevation: entry.projected.elevation,
       transition,
     });
   };
@@ -78,20 +84,19 @@ export function createProceduralDetailPlan(
     const level = levelName(unit.level);
     if (level === 'global') continue;
     const entries = unit.cells
-      .map((lodCell, index) => ({
-        lodCell,
-        cellId: visibleCellId(unit, index),
-        projected: projectedCell(visibleCellId(unit, index)),
-      }))
-      .filter(
-        (
-          entry,
-        ): entry is {
-          lodCell: (typeof unit.cells)[number];
-          cellId: string;
-          projected: ProceduralLodCell;
-        } => entry.projected !== undefined,
-      )
+      .map((lodCell, index) => {
+        const cellId = visibleCellId(unit, index);
+        const projected = projectedCell(cellId);
+        return projected === undefined
+          ? undefined
+          : {
+              lodCell,
+              cellId,
+              projected,
+              cellRadius: meanCellRadius(lodCell.cell),
+            };
+      })
+      .filter((entry): entry is ProjectedEntry => entry !== undefined)
       .sort((left, right) => left.cellId.localeCompare(right.cellId));
     const byTopologyId = new Map(entries.map((entry) => [entry.lodCell.cell.id, entry]));
 
@@ -103,14 +108,7 @@ export function createProceduralDetailPlan(
         modifiers: entry.projected.modifiers,
         count,
       }))
-        append(
-          detail,
-          entry.cellId,
-          level,
-          entry.lodCell.cell,
-          entry.projected.elevation,
-          false,
-        );
+        append(detail, entry, level, false);
     }
 
     const transitionLod: TransitionLod = level === 'regional' ? 1 : 3;
@@ -127,14 +125,7 @@ export function createProceduralDetailPlan(
             targetEdge,
             transitionLod,
           ))
-            append(
-              detail,
-              target.cellId,
-              level,
-              target.lodCell.cell,
-              target.projected.elevation,
-              true,
-            );
+            append(detail, target, level, true);
         if (sourceEdge !== null)
           for (const detail of createEdgeTransitionDetails(
             transitionCell(target),
@@ -142,14 +133,7 @@ export function createProceduralDetailPlan(
             sourceEdge,
             transitionLod,
           ))
-            append(
-              detail,
-              source.cellId,
-              level,
-              source.lodCell.cell,
-              source.projected.elevation,
-              true,
-            );
+            append(detail, source, level, true);
       }
     }
   }
@@ -183,7 +167,10 @@ export class ProceduralDetailRenderer {
   ): void {
     if (this.disposed) throw new Error('ProceduralDetailRenderer wurde bereits disposed.');
     const nextSignature = `${worldFingerprint}:${units
-      .map((unit) => `${unit.key}:${unit.cells.map((_cell, index) => visibleCellId(unit, index)).join(',')}`)
+      .map(
+        (unit) =>
+          `${unit.key}:${unit.cells.map((_cell, index) => visibleCellId(unit, index)).join(',')}`,
+      )
       .join('|')}`;
     if (nextSignature === this.signature) return;
     this.signature = nextSignature;
@@ -244,7 +231,8 @@ export class ProceduralDetailRenderer {
         .addScaledVector(tangentY, placement.y * placement.cellRadius * 0.72)
         .normalize();
       const objectScale = placement.cellRadius * detailScale(detailType) * placement.scale;
-      const radius = proceduralSurfaceRadius(placement.elevation, placement.level) + objectScale * 0.45;
+      const radius =
+        proceduralSurfaceRadius(placement.elevation, placement.level) + objectScale * 0.45;
       object.position.copy(direction).multiplyScalar(radius);
       align.setFromUnitVectors(worldUp, direction);
       spin.setFromAxisAngle(direction, placement.rotation);
@@ -271,10 +259,7 @@ export class ProceduralDetailRenderer {
   }
 }
 
-function transitionCell(entry: {
-  readonly cellId: string;
-  readonly projected: ProceduralLodCell;
-}): TransitionCell {
+function transitionCell(entry: ProjectedEntry): TransitionCell {
   return {
     cellId: entry.cellId,
     tileType: entry.projected.tileType,
@@ -314,7 +299,11 @@ function localPoint(
   tangentY: Vector3,
   scale: number,
 ): { readonly x: number; readonly y: number } {
-  const offset = { x: point.x - center.x, y: point.y - center.y, z: point.z - center.z };
+  const offset = {
+    x: point.x - center.x,
+    y: point.y - center.y,
+    z: point.z - center.z,
+  };
   return { x: dot(offset, tangentX) / scale, y: dot(offset, tangentY) / scale };
 }
 
