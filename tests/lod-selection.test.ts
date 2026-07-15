@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  cameraFocusDirection,
   isCellVisible,
   isFrontFacing,
   isInFrustum,
   nextRefinementState,
   projectedCellSizePx,
   RefinementController,
+  selectFocusedCandidateKeys,
   selectVisibleCells,
   type CameraState,
 } from '@/topology/lod/selection';
@@ -24,6 +26,97 @@ function camera(overrides: Partial<CameraState> = {}): CameraState {
     ...overrides,
   };
 }
+
+describe('cameraFocusDirection', () => {
+  it('liefert beim reinen Zoomen denselben zentralen Kugelpunkt', () => {
+    const far = cameraFocusDirection(camera({ position: { x: 0, y: 0, z: 4 } }));
+    const near = cameraFocusDirection(camera({ position: { x: 0, y: 0, z: 1.2 } }));
+
+    expect(near.x).toBeCloseTo(far.x, 12);
+    expect(near.y).toBeCloseTo(far.y, 12);
+    expect(near.z).toBeCloseTo(far.z, 12);
+    expect(near).toEqual({ x: 0, y: 0, z: 1 });
+  });
+
+  it('folgt einem seitlich gedrehten zentralen Kamerastrahl', () => {
+    const direction = normalize({ x: 0.12, y: 0, z: -1 });
+    const focus = cameraFocusDirection(camera({ forward: direction }));
+
+    expect(Math.hypot(focus.x, focus.y, focus.z)).toBeCloseTo(1, 12);
+    expect(focus.x).toBeGreaterThan(0);
+    expect(focus.z).toBeGreaterThan(0);
+  });
+});
+
+describe('selectFocusedCandidateKeys', () => {
+  it('priorisiert die Bildmitte vor einer seitlich größeren projizierten Zelle', () => {
+    const selected = selectFocusedCandidateKeys(
+      [
+        { key: 4, focusAlignment: 0.999, angularRadius: 0.1, projectedSizePx: 20 },
+        { key: 9, focusAlignment: 0.95, angularRadius: 0.1, projectedSizePx: 200 },
+      ],
+      new Set(),
+      1,
+    );
+
+    expect([...selected]).toEqual([4]);
+  });
+
+  it('behält einen aktiven Parent bei kleinen Fokusbewegungen innerhalb der räumlichen Hysterese', () => {
+    const nearBoundary = selectFocusedCandidateKeys(
+      [
+        {
+          key: 1,
+          focusAlignment: Math.cos(0.051),
+          angularRadius: 0.1,
+          projectedSizePx: 100,
+        },
+        {
+          key: 2,
+          focusAlignment: Math.cos(0.05),
+          angularRadius: 0.1,
+          projectedSizePx: 100,
+        },
+      ],
+      new Set([1]),
+      1,
+    );
+    expect([...nearBoundary]).toEqual([1]);
+
+    const clearCrossing = selectFocusedCandidateKeys(
+      [
+        {
+          key: 1,
+          focusAlignment: Math.cos(0.051),
+          angularRadius: 0.1,
+          projectedSizePx: 100,
+        },
+        {
+          key: 2,
+          focusAlignment: Math.cos(0.01),
+          angularRadius: 0.1,
+          projectedSizePx: 100,
+        },
+      ],
+      new Set([1]),
+      1,
+    );
+    expect([...clearCrossing]).toEqual([2]);
+  });
+
+  it('entscheidet identische Bewertungen deterministisch über den stabilen Schlüssel', () => {
+    const selected = selectFocusedCandidateKeys(
+      [
+        { key: 8, focusAlignment: 0.9, angularRadius: 0.1, projectedSizePx: 50 },
+        { key: 3, focusAlignment: 0.9, angularRadius: 0.1, projectedSizePx: 50 },
+      ],
+      new Set(),
+      1,
+    );
+
+    expect([...selected]).toEqual([3]);
+  });
+});
 
 describe('isFrontFacing (Rückseiten-/Horizont-Culling)', () => {
   it('accepts a cell centered directly towards the camera', () => {
@@ -151,3 +244,8 @@ describe('selectVisibleCells', () => {
     for (const cell of selected) expect(isCellVisible(cell.cell.center, cam)).toBe(true);
   });
 });
+
+function normalize(vector: Vector3): Vector3 {
+  const length = Math.hypot(vector.x, vector.y, vector.z);
+  return { x: vector.x / length, y: vector.y / length, z: vector.z / length };
+}
