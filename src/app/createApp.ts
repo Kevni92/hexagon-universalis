@@ -21,7 +21,7 @@ const WORLD_MODES: readonly WorldMode[] = ['earth', 'demo', 'lod', 'procedural']
 
 export function resolveWorldMode(search: string): WorldMode {
   const requested = new URLSearchParams(search).get('world');
-  return WORLD_MODES.find((mode) => mode === requested) ?? 'earth';
+  return WORLD_MODES.find((mode) => mode === requested) ?? 'procedural';
 }
 
 export function resolveProceduralWorldConfig(
