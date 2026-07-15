@@ -134,7 +134,11 @@ describe('ChunkRenderer', () => {
     const patch = createGlobalPatch(8);
     const visibleSubset = patch.cells.slice(0, 6);
     renderer.update(
-      visibleSubset.map((cell, index) => ({ key: `k${index}`, level: 0 as const, cells: [cell] })),
+      visibleSubset.map((cell, index) => ({
+        key: `k${index}`,
+        level: 0 as const,
+        cells: [cell],
+      })),
     );
     expect(renderer.activeChunkCount).toBe(6);
     expect(renderer.activeChunkCount).toBeLessThan(patch.cells.length);
