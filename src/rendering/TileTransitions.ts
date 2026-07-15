@@ -129,6 +129,7 @@ export function transitionDetailBudget(lod: TransitionLod): number {
 function exclusionReason(source: TransitionCell, target: TransitionCell): string | null {
   if (WATER.has(target.tileType)) return 'no-vegetation-in-water';
   if (target.modifiers.includes('glacier')) return 'no-details-on-glacier';
+  if (target.modifiers.includes('highMountains')) return 'no-details-on-high-mountains';
   if (
     (source.tileType === 'desert' && isSnow(target)) ||
     (target.tileType === 'desert' && isSnow(source))
