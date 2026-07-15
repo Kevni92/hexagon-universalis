@@ -39,6 +39,10 @@ Architekturentscheidungen mit dauerhafter Tragweite werden als ADRs unter
 [0001-hierarchical-geodesic-lod.md](./architecture/0001-hierarchical-geodesic-lod.md)
 zur mehrstufigen geodätischen Auflösungsarchitektur.
 
+Die verbindliche Zielarchitektur für die siebenstufige prozedurale Welt-LOD
+mit sichtbereichsgechunkten Budgets steht in
+[0002-seven-level-world-lod.md](./architecture/0002-seven-level-world-lod.md).
+
 Die Offline-Erzeugung, das komprimierte Chunkformat, Integritäts- und
 Größenprüfungen sowie die Debugkarten der realen Referenzregionen beschreibt
 [earth-tile-pyramid.md](./earth-tile-pyramid.md). Laufzeit-Laden und Rendering

@@ -1,5 +1,11 @@
 # Prozedurale Welt: Global-, Regional- und Lokal-LOD
 
+> Der aktuelle Runtime-Stand dieses Dokuments beschreibt weiterhin die
+> implementierte Drei-Stufen-Pipeline. Die verbindliche Zielarchitektur für
+> sieben Stufen, sichtbereichsgechunkte Materialisierung und Desktop-/Mobile-
+> Budgets ist in [ADR 0002](./architecture/0002-seven-level-world-lod.md)
+> festgelegt. Die Runtime-Migration erfolgt in #97.
+
 Issue #78 verbindet das deterministische Weltmodell aus #77 mit der geodätischen Topologie aus
 ADR 0001. Issue #91 balanciert Kamera und prozedurale Darstellung so aus, dass im Viewport nie
 mehrere Zellauflösungen nebeneinander liegen. Der explizite Modus `?world=procedural` ist von der
