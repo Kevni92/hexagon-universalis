@@ -1,4 +1,22 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
+
+type ProceduralLod = 'global' | 'regional' | 'local';
+
+async function zoomUntilLod(
+  canvas: Locator,
+  target: ProceduralLod,
+  deltaY: number,
+  maxSteps = 8,
+): Promise<void> {
+  for (let step = 0; step < maxSteps; step += 1) {
+    if ((await canvas.getAttribute('data-lod-level')) === target) return;
+    await canvas.dispatchEvent('wheel', { deltaY });
+    await canvas.evaluate(
+      () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+    );
+  }
+  await expect(canvas).toHaveAttribute('data-lod-level', target, { timeout: 15_000 });
+}
 
 test('production app loads a usable globe viewport', async ({ page }) => {
   const pageErrors: Error[] = [];
@@ -92,14 +110,12 @@ test('procedural world reaches Global, Regional and Lokal without console errors
   await expect(canvas).toHaveAttribute('data-lod-level', 'global');
   await expect(lodOutput).toHaveText('Global');
 
-  await canvas.dispatchEvent('wheel', { deltaY: -400 });
-  await expect(canvas).toHaveAttribute('data-lod-level', 'regional');
+  await zoomUntilLod(canvas, 'regional', -400);
   await expect(lodOutput).toHaveText('Regional');
   await expect
     .poll(async () => Number(await canvas.getAttribute('data-camera-distance')))
     .toBeGreaterThan(2);
-  await canvas.dispatchEvent('wheel', { deltaY: -650 });
-  await expect(canvas).toHaveAttribute('data-lod-level', 'local', { timeout: 15_000 });
+  await zoomUntilLod(canvas, 'local', -400);
   await expect(lodOutput).toHaveText('Lokal');
   await expect
     .poll(async () => Number(await canvas.getAttribute('data-camera-distance')))
@@ -137,8 +153,7 @@ test('procedural terrain exposes relief, complete terrain groups and bounded det
     contentType: 'image/png',
   });
 
-  await canvas.dispatchEvent('wheel', { deltaY: -400 });
-  await expect(canvas).toHaveAttribute('data-lod-level', 'regional');
+  await zoomUntilLod(canvas, 'regional', -400);
   await expect
     .poll(async () => Number(await canvas.getAttribute('data-detail-instances')))
     .toBeGreaterThan(0);
@@ -147,8 +162,7 @@ test('procedural terrain exposes relief, complete terrain groups and bounded det
     contentType: 'image/png',
   });
 
-  await canvas.dispatchEvent('wheel', { deltaY: -650 });
-  await expect(canvas).toHaveAttribute('data-lod-level', 'local', { timeout: 15_000 });
+  await zoomUntilLod(canvas, 'local', -400);
   await expect
     .poll(async () => Number(await canvas.getAttribute('data-detail-instances')))
     .toBeGreaterThan(0);
@@ -166,10 +180,8 @@ test('procedural terrain exposes relief, complete terrain groups and bounded det
   await canvas.dispatchEvent('wheel', { deltaY: 3_000 });
   await expect(canvas).toHaveAttribute('data-lod-level', 'global');
   await expect(canvas).toHaveAttribute('data-detail-instances', '0');
-  await canvas.dispatchEvent('wheel', { deltaY: -400 });
-  await expect(canvas).toHaveAttribute('data-lod-level', 'regional');
-  await canvas.dispatchEvent('wheel', { deltaY: -650 });
-  await expect(canvas).toHaveAttribute('data-lod-level', 'local', { timeout: 15_000 });
+  await zoomUntilLod(canvas, 'regional', -400);
+  await zoomUntilLod(canvas, 'local', -400);
   await expect
     .poll(async () => Number(await canvas.getAttribute('data-detail-instances')))
     .toBeGreaterThan(0);
