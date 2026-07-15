@@ -35,6 +35,33 @@ describe('ChunkRenderer', () => {
     expect(renderer.activeCellIds.size).toBe(2);
   });
 
+  it('applies relief radii per stable picking cell without adding draw calls', () => {
+    const units = unitsFromPatchCells(2);
+    const liftedCellId = units[0]?.cells[0]?.formattedId;
+    if (liftedCellId === undefined) throw new Error('missing lifted cell');
+    const renderer = new ChunkRenderer(1, undefined, (_position, _level, cellId) =>
+      cellId === liftedCellId ? 1.08 : 0.98,
+    );
+
+    renderer.update(units);
+
+    expect(renderer.activeChunkCount).toBe(2);
+    expect(renderer.activeCellIds).toEqual(new Set(units.map((unit) => unit.cells[0]!.formattedId)));
+    const radiiByMesh = new Map(
+      renderer.meshes.map((mesh) => {
+        const positions = mesh.geometry.getAttribute('position');
+        const radii = Array.from({ length: positions.count }, (_, index) =>
+          Math.hypot(positions.getX(index), positions.getY(index), positions.getZ(index)),
+        );
+        return [mesh.name, { minimum: Math.min(...radii), maximum: Math.max(...radii) }] as const;
+      }),
+    );
+    expect(radiiByMesh.get('unit-0')?.minimum).toBeCloseTo(1.08, 6);
+    expect(radiiByMesh.get('unit-0')?.maximum).toBeCloseTo(1.08, 6);
+    expect(radiiByMesh.get('unit-1')?.minimum).toBeCloseTo(0.98, 6);
+    expect(radiiByMesh.get('unit-1')?.maximum).toBeCloseTo(0.98, 6);
+  });
+
   it('differentially adds and removes chunks without rebuilding unchanged ones', () => {
     const renderer = new ChunkRenderer();
     const patch = createGlobalPatch(4);
@@ -54,13 +81,12 @@ describe('ChunkRenderer', () => {
     ]);
     expect(renderer.activeChunkCount).toBe(2);
     expect(renderer.meshes.find((mesh) => mesh.name === 'b')).toBeUndefined();
-    // 'a' bleibt dieselbe Mesh-Instanz (kein unnötiger Rebuild).
     expect(renderer.meshes.find((mesh) => mesh.name === 'a')).toBe(meshA);
   });
 
   it('draw calls (active chunk count) grow with visible chunks, not with total addressable cells', () => {
     const renderer = new ChunkRenderer();
-    const patch = createGlobalPatch(8); // 642 adressierbare Zellen
+    const patch = createGlobalPatch(8);
     const visibleSubset = patch.cells.slice(0, 6);
     renderer.update(
       visibleSubset.map((cell, index) => ({ key: `k${index}`, level: 0 as const, cells: [cell] })),
