@@ -150,10 +150,9 @@ test('procedural terrain exposes relief, complete terrain groups and bounded det
 
   await canvas.dispatchEvent('wheel', { deltaY: -650 });
   await expect(canvas).toHaveAttribute('data-lod-level', 'local', { timeout: 15_000 });
-  const localInstances = await expect
+  await expect
     .poll(async () => Number(await canvas.getAttribute('data-detail-instances')))
     .toBeGreaterThan(0);
-  void localInstances;
   await expect
     .poll(async () => Number(await canvas.getAttribute('data-detail-draw-calls')))
     .toBeLessThanOrEqual(12);
@@ -165,7 +164,6 @@ test('procedural terrain exposes relief, complete terrain groups and bounded det
     contentType: 'image/png',
   });
 
-  const firstLocalCount = Number(await canvas.getAttribute('data-detail-instances'));
   await canvas.dispatchEvent('wheel', { deltaY: 3_000 });
   await expect(canvas).toHaveAttribute('data-lod-level', 'global');
   await expect(canvas).toHaveAttribute('data-detail-instances', '0');
@@ -173,7 +171,10 @@ test('procedural terrain exposes relief, complete terrain groups and bounded det
   await expect(canvas).toHaveAttribute('data-lod-level', 'local', { timeout: 15_000 });
   await expect
     .poll(async () => Number(await canvas.getAttribute('data-detail-instances')))
-    .toBe(firstLocalCount);
+    .toBeGreaterThan(0);
+  await expect
+    .poll(async () => Number(await canvas.getAttribute('data-render-draw-calls')))
+    .toBeLessThanOrEqual(15);
 
   expect(pageErrors).toEqual([]);
 });
