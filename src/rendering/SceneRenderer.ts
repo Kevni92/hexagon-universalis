@@ -308,8 +308,7 @@ export class SceneRenderer {
       canvas.dataset.lodFinestUnitKeys = focusDiagnostics.finestUnitKeys.join(',');
       canvas.dataset.lodFinestCellCount = String(focusDiagnostics.finestCellCount);
       canvas.dataset.lodFinestCentroid = formatVector(focusDiagnostics.finestCentroid);
-      canvas.dataset.lodFocusAngle =
-        focusDiagnostics.finestAngularDistance?.toFixed(6) ?? '';
+      canvas.dataset.lodFocusAngle = focusDiagnostics.finestAngularDistance?.toFixed(6) ?? '';
     }
     canvas.dataset.cameraDistance = Math.hypot(
       this.camera.position.x,
@@ -403,7 +402,9 @@ export class SceneRenderer {
   }
 }
 
-function formatVector(vector: { readonly x: number; readonly y: number; readonly z: number } | null): string {
+function formatVector(
+  vector: { readonly x: number; readonly y: number; readonly z: number } | null,
+): string {
   if (vector === null) return '';
   return [vector.x, vector.y, vector.z].map((value) => value.toFixed(6)).join(',');
 }
