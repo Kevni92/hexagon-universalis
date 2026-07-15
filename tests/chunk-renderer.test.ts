@@ -69,6 +69,20 @@ describe('ChunkRenderer', () => {
     expect(renderer.activeChunkCount).toBeLessThan(patch.cells.length);
   });
 
+  it('rebuilds a stable bundle key when its cell composition changes', () => {
+    const patch = createGlobalPatch(2);
+    const renderer = new ChunkRenderer();
+    renderer.update([{ key: 'lvl0-global/root', level: 0, cells: patch.cells.slice(0, 6) }]);
+    const firstMesh = renderer.meshes[0];
+
+    renderer.update([{ key: 'lvl0-global/root', level: 0, cells: patch.cells.slice(6, 12) }]);
+
+    expect(renderer.meshes[0]).not.toBe(firstMesh);
+    expect(renderer.activeCellIds).toEqual(
+      new Set(patch.cells.slice(6, 12).map((cell) => cell.formattedId)),
+    );
+  });
+
   it('disposes all geometries and materials and clears the group', () => {
     const renderer = new ChunkRenderer();
     const units = unitsFromPatchCells(4);

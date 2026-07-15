@@ -76,3 +76,32 @@ test('globe canvas accepts pointer and wheel interaction', async ({ page }) => {
   await page.mouse.wheel(0, 120);
   await expect(page.getByTestId('app-status')).toBeVisible();
 });
+
+test('procedural world reaches Global, Regional and Lokal without console errors', async ({
+  page,
+}) => {
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+
+  await page.goto('/?world=procedural');
+  await expect(page.getByTestId('app-status')).toHaveText(
+    'Prozedurale Testwelt – künstliche Geografie',
+  );
+  const canvas = page.locator('canvas.viewport-canvas');
+  await expect(canvas).toHaveAttribute('data-lod-level', 'global');
+
+  await canvas.dispatchEvent('wheel', { deltaY: -400 });
+  await expect(canvas).toHaveAttribute('data-lod-level', 'regional');
+  await expect
+    .poll(async () => Number(await canvas.getAttribute('data-camera-distance')))
+    .toBeGreaterThan(2);
+  await canvas.dispatchEvent('wheel', { deltaY: -650 });
+  await expect(canvas).toHaveAttribute('data-lod-level', 'local', { timeout: 15_000 });
+  await expect
+    .poll(async () => Number(await canvas.getAttribute('data-camera-distance')))
+    .toBeLessThan(1.5);
+  await canvas.dispatchEvent('wheel', { deltaY: 3_000 });
+  await expect(canvas).toHaveAttribute('data-lod-level', 'global');
+
+  expect(pageErrors).toEqual([]);
+});

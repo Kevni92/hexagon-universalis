@@ -24,6 +24,12 @@ export interface VisibleUnit {
   readonly key: string;
   readonly level: 0 | 1 | 2;
   readonly cells: readonly LodCell[];
+  /** Optional voll qualifizierte IDs, wenn die lokale Elternkette mehr als einen Index umfasst. */
+  readonly cellIds?: readonly string[];
+}
+
+export function visibleCellId(unit: VisibleUnit, index: number): string {
+  return unit.cellIds?.[index] ?? unit.cells[index]?.formattedId ?? '';
 }
 
 /**
@@ -91,6 +97,7 @@ export class WorldLodController {
     const activeLocalParents = new Set<string>();
     const activeLocalHashes = new Set<number>();
     const coarseGlobalCells: LodCell[] = [];
+    let remainingLocalChunkBudget = this.profile.levels.local.maxActiveChunks;
 
     for (const entry of visibleGlobal) {
       const globalCell = entry.cell;
@@ -107,13 +114,14 @@ export class WorldLodController {
       }
       activeRegionalParents.add(globalCell.id.index);
 
-      this.appendRegionalUnits(
+      remainingLocalChunkBudget -= this.appendRegionalUnits(
         globalCell,
         regionalChunk,
         camera,
         units,
         activeLocalParents,
         activeLocalHashes,
+        remainingLocalChunkBudget,
       );
     }
 
@@ -142,7 +150,8 @@ export class WorldLodController {
     units: VisibleUnit[],
     activeLocalParents: Set<string>,
     activeLocalHashes: Set<number>,
-  ): void {
+    remainingLocalChunkBudget: number,
+  ): number {
     const regionalParentCenters = regionalChunk.cells.map((lodCell) => lodCell.cell.center);
 
     const visibleRegional = regionalChunk.cells
@@ -160,7 +169,7 @@ export class WorldLodController {
       visibleRegional,
       (entry) => hashParentKey(globalCell.id.index, entry.cell.id.index),
       this.localController,
-      this.profile.levels.local.maxActiveChunks,
+      remainingLocalChunkBudget,
     );
 
     // Nicht sichtbare Regional-Zellen bleiben Teil des gebündelten Level-1-Rests
@@ -168,6 +177,7 @@ export class WorldLodController {
     const coarseRegionalCells: LodCell[] = regionalChunk.cells.filter(
       (regionalCell) => !isCellVisible(regionalCell.cell.center, camera),
     );
+    let activeLocalChunkCount = 0;
 
     for (const entry of visibleRegional) {
       const regionalCell = entry.cell;
@@ -186,7 +196,14 @@ export class WorldLodController {
       }
       activeLocalParents.add(localKey);
       activeLocalHashes.add(localHash);
-      units.push({ key: localChunk.formattedId, level: 2, cells: localChunk.cells });
+      activeLocalChunkCount += 1;
+      const qualifiedPrefix = `lvl2-local/g${globalCell.id.index}/p${regionalCell.id.index}`;
+      units.push({
+        key: qualifiedPrefix,
+        level: 2,
+        cells: localChunk.cells,
+        cellIds: localChunk.cells.map((cell) => `${qualifiedPrefix}/c${cell.id.index}`),
+      });
     }
 
     if (coarseRegionalCells.length === regionalChunk.cells.length) {
@@ -199,6 +216,8 @@ export class WorldLodController {
         cells: coarseRegionalCells,
       });
     }
+
+    return activeLocalChunkCount;
   }
 
   /**
@@ -273,6 +292,119 @@ export class WorldLodController {
     for (const key of this.localChunkCache.keys())
       if (!activeKeys.has(key)) this.localChunkCache.delete(key);
   }
+}
+
+/**
+ * Selektive, lückenlose Overlay-Auswahl für die prozedurale Testwelt. Die
+ * geschlossene globale Stufe bleibt als Fallback resident. Regional- und
+ * Lokalstufe materialisieren ausschließlich Zellen im aktuellen Sichtfeld
+ * und liegen mit minimalem radialem Abstand darüber. Dadurch beeinflusst ein
+ * Zoom nicht die Rückseite der Welt, während die Basiskugel Übergangsränder
+ * ohne schwarze Abdeckungslücken schließt.
+ */
+export class SelectiveOverlayWorldLodController {
+  private static readonly REGIONAL_FOCUS_RADIANS = Math.PI * 0.3;
+  private static readonly LOCAL_FOCUS_RADIANS = Math.PI * 0.14;
+  private readonly globalPatch: LodPatch;
+  private regionalPatch: LodPatch | null = null;
+  private localPatch: LodPatch | null = null;
+  private readonly regionalController: RefinementController;
+  private readonly localController: RefinementController;
+
+  public constructor(private readonly profile: QualityProfile) {
+    this.globalPatch = createGlobalPatch(profile.levels.global.frequency);
+    this.regionalController = new RefinementController(profile.levels.regional);
+    this.localController = new RefinementController(profile.levels.local);
+  }
+
+  public update(camera: CameraState): readonly VisibleUnit[] {
+    const globalSize = maximumProjectedCellSize(this.globalPatch.cells, camera);
+    const regional = this.regionalController.update(0, globalSize) === 'refined';
+    const units: VisibleUnit[] = [this.visibleUnit(0, this.globalPatch.cells)];
+
+    if (regional) {
+      const regionalPatch = this.patchFor(1);
+      const visibleRegional = regionalPatch.cells.filter((cell) =>
+        isFocusedCell(
+          cell.cell.center,
+          camera,
+          SelectiveOverlayWorldLodController.REGIONAL_FOCUS_RADIANS,
+        ),
+      );
+      if (visibleRegional.length > 0) units.push(this.visibleUnit(1, visibleRegional));
+      const regionalSize = maximumProjectedCellSize(regionalPatch.cells, camera);
+      const local = this.localController.update(0, regionalSize) === 'refined';
+      if (local) {
+        const localPatch = this.patchFor(2);
+        const visibleLocal = localPatch.cells.filter((cell) =>
+          isFocusedCell(
+            cell.cell.center,
+            camera,
+            SelectiveOverlayWorldLodController.LOCAL_FOCUS_RADIANS,
+          ),
+        );
+        if (visibleLocal.length > 0) units.push(this.visibleUnit(2, visibleLocal));
+      } else this.localPatch = null;
+    } else {
+      this.localController.reset();
+      this.regionalPatch = null;
+      this.localPatch = null;
+    }
+
+    return units;
+  }
+
+  private visibleUnit(depth: 0 | 1 | 2, cells: readonly LodCell[]): VisibleUnit {
+    const name = (['global', 'regional', 'local'] as const)[depth];
+    const prefix = `lvl${depth}-${name}/${depth === 0 ? 'root' : 'visible'}`;
+    return {
+      key: prefix,
+      level: depth,
+      cells,
+      cellIds: cells.map((cell) => `${prefix}/c${cell.id.index}`),
+    };
+  }
+
+  public reset(): void {
+    this.regionalController.reset();
+    this.localController.reset();
+    this.regionalPatch = null;
+    this.localPatch = null;
+  }
+
+  private patchFor(depth: 0 | 1 | 2): LodPatch {
+    if (depth === 0) return this.globalPatch;
+    if (depth === 1) {
+      this.regionalPatch ??= createGlobalPatch(this.profile.levels.regional.frequency);
+      return this.regionalPatch;
+    }
+    this.localPatch ??= createGlobalPatch(this.profile.levels.local.frequency);
+    return this.localPatch;
+  }
+}
+
+function isFocusedCell(center: Vector3, camera: CameraState, angularRadius: number): boolean {
+  if (!isCellVisible(center, camera)) return false;
+  const cameraLength = Math.hypot(camera.position.x, camera.position.y, camera.position.z);
+  if (cameraLength === 0) return false;
+  const focus = {
+    x: camera.position.x / cameraLength,
+    y: camera.position.y / cameraLength,
+    z: camera.position.z / cameraLength,
+  };
+  return clampDot(center, focus) >= Math.cos(angularRadius);
+}
+
+function maximumProjectedCellSize(cells: readonly LodCell[], camera: CameraState): number {
+  let maximum = 0;
+  for (const cell of cells) {
+    if (!isCellVisible(cell.cell.center, camera)) continue;
+    maximum = Math.max(
+      maximum,
+      projectedCellSizePx(cell.cell.center, estimateWorldRadius(cell, camera.sphereRadius), camera),
+    );
+  }
+  return maximum;
 }
 
 function estimateWorldRadius(lodCell: LodCell, sphereRadius: number): number {
