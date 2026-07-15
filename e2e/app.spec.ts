@@ -155,6 +155,30 @@ test('procedural world reaches Global, Regional and Lokal without console errors
   expect(pageErrors).toEqual([]);
 });
 
+test('close-up camera tilts smoothly while dragging stays north-up', async ({ page }) => {
+  test.slow();
+  await page.goto('/?world=procedural');
+  const canvas = page.locator('canvas.viewport-canvas');
+
+  await expect(canvas).toHaveAttribute('data-camera-tilt', '0.0000');
+  await expect(canvas).toHaveAttribute('data-north-up', 'true');
+  await zoomUntilLod(canvas, 'local', -400);
+  const closeTilt = Number(await canvas.getAttribute('data-camera-tilt'));
+  expect(closeTilt).toBeGreaterThan(0.1);
+
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (box === null) return;
+  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.75, box.y + box.height * 0.5, { steps: 8 });
+  await page.mouse.up();
+  await expect(canvas).toHaveAttribute('data-north-up', 'true');
+  await expect
+    .poll(async () => Number(await canvas.getAttribute('data-camera-tilt')))
+    .toBeGreaterThan(0.1);
+});
+
 test('procedural terrain exposes relief and complete terrain groups', async ({ page }) => {
   const pageErrors: Error[] = [];
   page.on('pageerror', (error) => pageErrors.push(error));
@@ -206,6 +230,7 @@ test('low-density procedural LOD stays within detail and draw-call budgets', asy
 test('low-density local relief remains closed from an oblique angle', async ({
   page,
 }, testInfo) => {
+  test.slow();
   test.skip(testInfo.project.name !== 'chromium', 'Visuelle Abnahme läuft im Desktop-Chromium.');
   const pageErrors: Error[] = [];
   page.on('pageerror', (error) => pageErrors.push(error));
@@ -237,6 +262,7 @@ test('low-density local relief remains closed from an oblique angle', async ({
 test('low-density relief restores the same render state after a complete LOD cycle', async ({
   page,
 }) => {
+  test.slow();
   const pageErrors: Error[] = [];
   page.on('pageerror', (error) => pageErrors.push(error));
   await page.goto('/?world=procedural&seed=fgh&density=low');

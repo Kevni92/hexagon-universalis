@@ -434,6 +434,22 @@ function maximumProjectedCellSize(cells: readonly LodCell[], camera: CameraState
       ) * viewportScale,
     );
   }
+  // A coarse geodesic patch can have no cell center inside a narrow frustum
+  // after the northward close-up tilt. Fall back to projected candidates so
+  // the LOD controller still refines instead of getting stuck on global data
+  // while the globe itself remains visible.
+  if (maximum === 0) {
+    for (const cell of cells) {
+      maximum = Math.max(
+        maximum,
+        projectedCellSizePx(
+          cell.cell.center,
+          estimateWorldRadius(cell, camera.sphereRadius),
+          camera,
+        ) * viewportScale,
+      );
+    }
+  }
   return maximum;
 }
 

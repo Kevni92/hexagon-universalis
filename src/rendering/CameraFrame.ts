@@ -4,7 +4,7 @@ import type { Vector3 } from '@/topology/geodesic';
 import type { CameraState } from '@/topology/lod/selection';
 
 export interface CameraFrameInput {
-  /** Weltrotation der Globus-Gruppe (GlobeControls rotiert die Welt, nicht die Kamera). */
+  /** Weltrotation der Globus-Gruppe; die nordstabile Steuerung hält sie normalerweise auf Identität. */
   readonly worldQuaternion: THREE.Quaternion;
   /** Kameraposition in Weltkoordinaten. */
   readonly cameraPosition: THREE.Vector3;
@@ -22,10 +22,10 @@ export interface CameraFrameInput {
 
 /**
  * Drückt die Kamera im **lokalen, unrotierten** Koordinatensystem der
- * Globus-Gruppe aus. Da `GlobeControls` die Kamera fix hält und stattdessen
- * `world` per Quaternion rotiert, müssen für Culling/LOD (deren Zellzentren im
- * lokalen Raum liegen) Kameraposition und Blickrichtung mit der Inversen der
- * Weltrotation zurücktransformiert werden.
+ * Globus-Gruppe aus. Die nordstabile `GlobeControls`-Variante bewegt die
+ * Kamera entlang einer Orbitbahn und lässt die Weltrotation auf Identität;
+ * die inverse Weltrotation bleibt für bereits rotierte Hosts als robuste
+ * Transformationsgrenze erhalten.
  */
 export function computeLocalCameraState(input: CameraFrameInput): CameraState {
   const inverseWorld = input.worldQuaternion.clone().invert();

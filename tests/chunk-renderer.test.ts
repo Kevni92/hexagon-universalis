@@ -197,6 +197,28 @@ describe('ChunkRenderer', () => {
     );
   });
 
+  it('crossfades replaced LOD meshes and disposes the old mesh after the transition', () => {
+    const patch = createGlobalPatch(2);
+    const first = patch.cells[0];
+    const second = patch.cells[1];
+    if (first === undefined || second === undefined) throw new Error('missing cells');
+    const renderer = new ChunkRenderer(1, undefined, undefined, 0, 0.2);
+
+    renderer.update([{ key: 'first', level: 0, cells: [first] }]);
+    renderer.update([{ key: 'second', level: 1, cells: [second] }]);
+
+    expect(renderer.group.children).toHaveLength(2);
+    const incoming = renderer.meshes[0];
+    if (incoming === undefined) throw new Error('missing incoming mesh');
+    expect(incoming.material.opacity).toBe(0);
+    renderer.updateTransitions(0.1);
+    expect(incoming.material.opacity).toBeGreaterThan(0);
+    expect(incoming.material.opacity).toBeLessThan(1);
+    renderer.updateTransitions(0.1);
+    expect(renderer.group.children).toHaveLength(1);
+    expect(incoming.material.opacity).toBe(1);
+  });
+
   it('disposes all geometries and materials and clears the group', () => {
     const renderer = new ChunkRenderer();
     const units = unitsFromPatchCells(4);

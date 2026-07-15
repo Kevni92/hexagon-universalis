@@ -65,8 +65,8 @@ function createControls(options?: ConstructorParameters<typeof GlobeControls>[3]
 }
 
 describe('GlobeControls', () => {
-  it('rotates rightward drag in a stable, bounded pitch range', () => {
-    const { controls, element, world } = createControls({ inertia: false });
+  it('orbits the camera on drag while keeping the world north-up', () => {
+    const { camera, controls, element, world } = createControls({ inertia: false });
 
     element.dispatch('pointerdown', {
       pointerId: 1,
@@ -76,10 +76,13 @@ describe('GlobeControls', () => {
       clientY: 0,
     });
     element.dispatch('pointermove', { pointerId: 1, clientX: 100, clientY: 0 });
-    expect(world.rotation.y).toBeGreaterThan(0);
+    expect(camera.position.x).toBeLessThan(0);
+    expect(world.quaternion.angleTo(new THREE.Quaternion())).toBe(0);
 
     element.dispatch('pointermove', { pointerId: 1, clientX: 100, clientY: -10_000 });
-    expect(Math.abs(world.rotation.x)).toBeLessThan(Math.PI / 2);
+    const latitude = Math.asin(camera.position.y / camera.position.length());
+    expect(Math.abs(latitude)).toBeLessThan(Math.PI / 2);
+    expect(world.quaternion.angleTo(new THREE.Quaternion())).toBe(0);
     controls.dispose();
   });
 
@@ -88,9 +91,10 @@ describe('GlobeControls', () => {
     const preventDefault = vi.fn();
 
     element.dispatch('wheel', { deltaY: -1_000_000, deltaMode: 0, preventDefault });
-    expect(camera.position.z).toBe(2.2);
+    expect(camera.position.length()).toBeCloseTo(2.2);
     element.dispatch('wheel', { deltaY: 1_000_000, deltaMode: 0, preventDefault });
-    expect(camera.position.z).toBe(8);
+    expect(camera.position.length()).toBeCloseTo(8);
+    expect(camera.position.y).toBeCloseTo(0);
     expect(preventDefault).toHaveBeenCalledTimes(2);
     expect(normalizeWheelDelta({ deltaY: 2, deltaMode: 1 })).toBe(32);
     controls.dispose();
@@ -101,7 +105,8 @@ describe('GlobeControls', () => {
 
     element.dispatch('wheel', { deltaY: -1_000_000, deltaMode: 0, preventDefault: vi.fn() });
 
-    expect(camera.position.z).toBe(1.18);
+    expect(camera.position.length()).toBeCloseTo(1.18);
+    expect(camera.position.y).toBeGreaterThan(0);
     controls.dispose();
   });
 
@@ -116,7 +121,7 @@ describe('GlobeControls', () => {
       zoomAdaptiveRotation: true,
     });
     element.dispatch('wheel', { deltaY: -1_000_000, deltaMode: 0, preventDefault: vi.fn() });
-    expect(camera.position.z).toBe(1.18);
+    expect(camera.position.length()).toBeCloseTo(1.18);
     element.dispatch('pointerdown', {
       pointerId: 1,
       pointerType: 'mouse',
@@ -126,7 +131,8 @@ describe('GlobeControls', () => {
     });
     element.dispatch('pointermove', { pointerId: 1, clientX: 100, clientY: 0 });
 
-    expect(world.rotation.y).toBeCloseTo(100 * 0.005 * 0.08);
+    expect(camera.position.x).toBeLessThan(0);
+    expect(world.quaternion.angleTo(new THREE.Quaternion())).toBe(0);
     controls.dispose();
   });
 
@@ -141,7 +147,7 @@ describe('GlobeControls', () => {
       clientY: 100,
     });
     element.dispatch('pointermove', { pointerId: 2, clientX: 0, clientY: 200 });
-    expect(world.rotation.y).toBe(0);
+    expect(world.quaternion.angleTo(new THREE.Quaternion())).toBe(0);
     element.dispatch('pointercancel', { pointerId: 1 });
     const before = world.quaternion.clone();
     element.dispatch('pointermove', { pointerId: 2, clientX: 100, clientY: 200 });
@@ -153,7 +159,7 @@ describe('GlobeControls', () => {
   });
 
   it('applies time-based inertia with decreasing velocity', () => {
-    const { controls, element, world } = createControls({ damping: 8 });
+    const { camera, controls, element, world } = createControls({ damping: 8 });
 
     element.dispatch('pointerdown', {
       pointerId: 1,
@@ -164,13 +170,52 @@ describe('GlobeControls', () => {
     });
     element.dispatch('pointermove', { pointerId: 1, clientX: 20, clientY: 0 });
     element.dispatch('pointerup', { pointerId: 1 });
-    const first = world.rotation.y;
+    const first = Math.atan2(camera.position.x, camera.position.z);
     controls.update(0.016);
-    const second = world.rotation.y;
+    const second = Math.atan2(camera.position.x, camera.position.z);
     controls.update(0.016);
-    const third = world.rotation.y;
+    const third = Math.atan2(camera.position.x, camera.position.z);
 
-    expect(second - first).toBeGreaterThan(third - second);
+    expect(Math.abs(second - first)).toBeGreaterThan(Math.abs(third - second));
+    expect(world.quaternion.angleTo(new THREE.Quaternion())).toBe(0);
+    controls.dispose();
+  });
+
+  it('adds a smooth, bounded tilt only in the close-up zoom range', () => {
+    const { camera, controls, element } = createControls({
+      inertia: false,
+      maxDistance: 4,
+      nearTilt: 0.2,
+      nearTiltStart: 0.5,
+    });
+
+    expect(camera.position.y).toBeCloseTo(0);
+    element.dispatch('wheel', { deltaY: -500, deltaMode: 0, preventDefault: vi.fn() });
+    const intermediateTilt = Math.asin(camera.position.y / camera.position.length());
+    expect(intermediateTilt).toBeGreaterThan(0);
+    expect(intermediateTilt).toBeLessThan(0.2);
+
+    element.dispatch('wheel', { deltaY: -1_000_000, deltaMode: 0, preventDefault: vi.fn() });
+    const closeTilt = Math.asin(camera.position.y / camera.position.length());
+    expect(closeTilt).toBeCloseTo(0.2);
+    controls.dispose();
+  });
+
+  it('keeps the northward close-up tilt stable across small zoom corrections', () => {
+    const { camera, controls, element } = createControls({
+      inertia: false,
+      minDistance: 1.2,
+      maxDistance: 3.4,
+    });
+
+    element.dispatch('wheel', { deltaY: -1_000_000, deltaMode: 0, preventDefault: vi.fn() });
+    const closeTilt = Math.asin(camera.position.y / camera.position.length());
+    element.dispatch('wheel', { deltaY: 20, deltaMode: 0, preventDefault: vi.fn() });
+    const correctedTilt = Math.asin(camera.position.y / camera.position.length());
+
+    expect(closeTilt).toBeCloseTo(THREE.MathUtils.degToRad(10));
+    expect(correctedTilt).toBeCloseTo(closeTilt);
+    expect(correctedTilt).toBeGreaterThan(0);
     controls.dispose();
   });
 });

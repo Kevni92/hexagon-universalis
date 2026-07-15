@@ -353,11 +353,12 @@ selektive Chunk-Pipeline aktiviert; er ersetzt `earth`/`demo` nicht.
   angenommen.
 - **Kamera-Frame-Transform:** `computeLocalCameraState`
   (`src/rendering/CameraFrame.ts`) drückt Kameraposition und Blickrichtung im
-  lokalen, unrotierten Weltframe aus (Inverse der `world`-Quaternion), da
-  `GlobeControls` die Welt statt der Kamera rotiert. Mit echtem three.js
-  (kein Mock) getestet in `tests/camera-frame.test.ts`
-  (Rückseiten-Chunk verworfen, Vorderseiten-Chunk behalten nach realer
-  Weltrotation).
+  lokalen, unrotierten Weltframe aus (Inverse der `world`-Quaternion). Die
+  nordstabile `GlobeControls`-Steuerung bewegt die Kamera auf einer Orbitbahn
+  und hält den Welt-Quaternion auf Identität; die inverse Transformation bleibt
+  für rotierte Hosts als robuste Grenze erhalten. Mit echtem three.js (kein
+  Mock) getestet in `tests/camera-frame.test.ts` (Rückseiten-Chunk verworfen,
+  Vorderseiten-Chunk behalten nach realer Weltrotation).
 - **Hysterese + erzwungenes Budget:** `RefinementController` (mirrored auf
   `LodController` aus `TileLod.ts`, eigener `RefinementState`-Typ pro Ebene,
   getrennt von `LodLevel`). `WorldLodController.update` wertet je Elternzelle

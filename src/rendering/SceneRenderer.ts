@@ -12,7 +12,7 @@ import { ProceduralWorldLod, type ProceduralWorldLodLevel } from '@/world/proced
 import type { ProceduralWorldConfig } from '@/world/proceduralWorld';
 
 import { createCellGlobeMesh } from './CellGlobe';
-import { ChunkRenderer } from './ChunkRenderer';
+import { ChunkRenderer, LOD_TRANSITION_DURATION_SECONDS } from './ChunkRenderer';
 import { computeLocalCameraState } from './CameraFrame';
 import { ProceduralDetailRenderer } from './ProceduralDetails';
 import { PROCEDURAL_CAMERA_RANGE } from './ProceduralCamera';
@@ -23,6 +23,8 @@ import {
 } from './ProceduralTerrain';
 
 const MAX_PIXEL_RATIO = 2;
+const LOD_AZIMUTH_STEP_RADIANS = THREE.MathUtils.degToRad(20);
+const LOD_ELEVATION_STEP_RADIANS = THREE.MathUtils.degToRad(30);
 const CAMERA = { fov: 45, near: 0.1, far: 100, z: 3.4 } as const;
 const SHOWCASE_TOPOLOGY_FREQUENCY = 2;
 const PROCEDURAL_LEVELS = ['global', 'regional', 'local'] as const;
@@ -100,7 +102,11 @@ export class SceneRenderer {
 
     this.scene.background = new THREE.Color(0x07111f);
     this.camera.position.set(0, 0, CAMERA.z);
-    this.scene.add(this.createHemisphereLight(), this.createKeyLight(), this.world);
+    // Keep the key light in camera space. The camera orbits around the
+    // north-stable globe, so a scene-fixed key light would appear to sweep
+    // across the surface during every drag.
+    this.camera.add(this.createKeyLight());
+    this.scene.add(this.createHemisphereLight(), this.world, this.camera);
 
     if (worldMode === 'procedural') {
       this.cellGlobe = null;
@@ -120,6 +126,7 @@ export class SceneRenderer {
           return proceduralSurfaceRadius(elevation, PROCEDURAL_LEVELS[level]);
         },
         3,
+        LOD_TRANSITION_DURATION_SECONDS,
       );
       this.proceduralDetails = new ProceduralDetailRenderer();
       this.world.add(this.chunkRenderer.group, this.proceduralDetails.group);
@@ -129,7 +136,13 @@ export class SceneRenderer {
       this.worldLod = new WorldLodController(lodQualityProfile);
       this.proceduralWorldLod = null;
       this.proceduralDetails = null;
-      this.chunkRenderer = new ChunkRenderer();
+      this.chunkRenderer = new ChunkRenderer(
+        1,
+        undefined,
+        undefined,
+        0,
+        LOD_TRANSITION_DURATION_SECONDS,
+      );
       this.world.add(this.chunkRenderer.group);
       this.earthRuntime = worldMode === 'earth' ? new EarthChunkRuntime() : null;
     } else {
@@ -167,6 +180,7 @@ export class SceneRenderer {
     this.resize();
     if ((this.worldLod !== null || this.proceduralWorldLod !== null) && this.chunkRenderer !== null)
       this.updateLod();
+    this.chunkRenderer?.updateTransitions(LOD_TRANSITION_DURATION_SECONDS);
     if (this.earthRuntime !== null) {
       if (onEarthStatus !== undefined) this.earthRuntime.subscribe(onEarthStatus);
       this.ready = this.initializeEarth().catch(() => undefined);
@@ -312,6 +326,7 @@ export class SceneRenderer {
     this.controls.update(deltaSeconds);
     if ((this.worldLod !== null || this.proceduralWorldLod !== null) && this.chunkRenderer !== null)
       this.updateLod();
+    this.chunkRenderer?.updateTransitions(deltaSeconds);
     this.renderer.render(this.scene, this.camera);
     this.animationFrameId = requestAnimationFrame(this.renderFrame);
   };
@@ -363,6 +378,15 @@ export class SceneRenderer {
       this.camera.position.y,
       this.camera.position.z,
     ).toFixed(2);
+    canvas.dataset.cameraTilt = Math.atan2(
+      this.camera.position.y,
+      Math.hypot(this.camera.position.x, this.camera.position.z),
+    ).toFixed(4);
+    const worldQuaternion = this.world.quaternion;
+    canvas.dataset.northUp =
+      Math.abs(worldQuaternion.x) + Math.abs(worldQuaternion.y) + Math.abs(worldQuaternion.z) < 1e-6
+        ? 'true'
+        : 'false';
     if (this.proceduralWorldLod !== null) {
       canvas.dataset.worldFingerprint = this.proceduralWorldLod.fingerprint;
       this.updateProceduralDetailsAndDiagnostics();
@@ -375,14 +399,12 @@ export class SceneRenderer {
   private lodInputKey(): string {
     const camera = this.camera;
     const viewportHeight = this.container.clientHeight || 1;
+    const distance = Math.hypot(camera.position.x, camera.position.y, camera.position.z);
+    const horizontalDistance = Math.hypot(camera.position.x, camera.position.z);
     const common = [
-      camera.position.x,
-      camera.position.y,
-      camera.position.z,
-      camera.quaternion.x,
-      camera.quaternion.y,
-      camera.quaternion.z,
-      camera.quaternion.w,
+      Math.round(distance * 1000) / 1000,
+      quantizeAngle(Math.atan2(camera.position.x, camera.position.z), LOD_AZIMUTH_STEP_RADIANS),
+      quantizeAngle(Math.atan2(camera.position.y, horizontalDistance), LOD_ELEVATION_STEP_RADIANS),
       camera.fov,
       camera.aspect,
       viewportHeight,
@@ -490,6 +512,10 @@ export class SceneRenderer {
       })
       .catch(() => undefined);
   }
+}
+
+function quantizeAngle(angle: number, stepRadians: number): number {
+  return Math.round(angle / stepRadians);
 }
 
 function formatVector(
