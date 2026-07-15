@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 
 import { ChunkRenderer } from '@/rendering/ChunkRenderer';
@@ -35,7 +36,7 @@ describe('ChunkRenderer', () => {
     expect(renderer.activeCellIds.size).toBe(2);
   });
 
-  it('applies relief podiums per stable picking cell without adding draw calls', () => {
+  it('applies relief podiums with one fixed substrate draw call instead of per-cell meshes', () => {
     const units = unitsFromPatchCells(2);
     const liftedCellId = units[0]?.cells[0]?.formattedId;
     if (liftedCellId === undefined) throw new Error('missing lifted cell');
@@ -45,7 +46,8 @@ describe('ChunkRenderer', () => {
 
     renderer.update(units);
 
-    expect(renderer.activeChunkCount).toBe(2);
+    expect(renderer.activeChunkCount).toBe(3);
+    expect(renderer.activeSubstrateDrawCallCount).toBe(1);
     expect(renderer.activeCellIds).toEqual(
       new Set(units.map((unit) => unit.cells[0]!.formattedId)),
     );
@@ -104,7 +106,44 @@ describe('ChunkRenderer', () => {
     expect(mesh.userData.sideTriangleCount).toBe(cell.cell.boundary.length * 2);
     expect(mesh.userData.triangleCount).toBe(cell.cell.boundary.length * 3);
     expect(new Set(mesh.userData.cellIds as readonly string[])).toEqual(new Set([cellId]));
-    expect(renderer.activeChunkCount).toBe(1);
+    expect(renderer.activeChunkCount).toBe(2);
+  });
+
+  it('covers podium seams with a non-pickable substrate below the shared base radius', () => {
+    const renderer = new ChunkRenderer(1, undefined, () => 1.04);
+    renderer.update(unitsFromPatchCells(1));
+    const substrate = renderer.group.children.find(
+      (child): child is THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial> =>
+        child instanceof THREE.Mesh && child.name === 'procedural-planet-substrate',
+    );
+    expect(substrate).toBeDefined();
+    if (substrate === undefined) throw new Error('missing substrate');
+
+    const positions = substrate.geometry.getAttribute('position');
+    for (let index = 0; index < positions.count; index += 1)
+      expect(
+        Math.hypot(positions.getX(index), positions.getY(index), positions.getZ(index)),
+      ).toBeCloseTo(0.974, 5);
+    expect(substrate.material.color.getHex()).toBe(0x496a7a);
+    const intersections: THREE.Intersection[] = [];
+    substrate.raycast(new THREE.Raycaster(), intersections);
+    expect(intersections).toEqual([]);
+
+    let disposedGeometry = false;
+    let disposedMaterial = false;
+    const originalGeometryDispose = substrate.geometry.dispose.bind(substrate.geometry);
+    substrate.geometry.dispose = () => {
+      disposedGeometry = true;
+      originalGeometryDispose();
+    };
+    const originalMaterialDispose = substrate.material.dispose.bind(substrate.material);
+    substrate.material.dispose = () => {
+      disposedMaterial = true;
+      originalMaterialDispose();
+    };
+    renderer.dispose();
+    expect(disposedGeometry).toBe(true);
+    expect(disposedMaterial).toBe(true);
   });
 
   it('differentially adds and removes chunks without rebuilding unchanged ones', () => {
