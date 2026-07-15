@@ -46,7 +46,9 @@ describe('ChunkRenderer', () => {
     renderer.update(units);
 
     expect(renderer.activeChunkCount).toBe(2);
-    expect(renderer.activeCellIds).toEqual(new Set(units.map((unit) => unit.cells[0]!.formattedId)));
+    expect(renderer.activeCellIds).toEqual(
+      new Set(units.map((unit) => unit.cells[0]!.formattedId)),
+    );
     const radiiByMesh = new Map(
       renderer.meshes.map((mesh) => {
         const positions = mesh.geometry.getAttribute('position');
