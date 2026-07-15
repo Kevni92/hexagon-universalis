@@ -98,7 +98,9 @@ export function createProceduralDetailPlan(
       })
       .filter((entry): entry is ProjectedEntry => entry !== undefined)
       .sort((left, right) => left.cellId.localeCompare(right.cellId));
-    const byTopologyId = new Map(entries.map((entry) => [entry.lodCell.cell.id, entry]));
+    const byTopologyId = new Map(
+      entries.map((entry) => [entry.lodCell.cell.id, entry] as const),
+    );
 
     for (const entry of entries) {
       const count = level === 'regional' ? 1 : 3;
