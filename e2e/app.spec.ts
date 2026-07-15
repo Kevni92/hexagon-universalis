@@ -53,9 +53,9 @@ test('lod world renders the selective multi-level chunk pipeline without console
     await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2 + 20);
     await page.mouse.up();
     await canvas.hover();
-    await page.mouse.wheel(0, -200); // hineinzoomen, verfeinert Chunks
+    await page.mouse.wheel(0, -200);
     await page.waitForTimeout(200);
-    await page.mouse.wheel(0, 400); // wieder herauszoomen, vergröbert Chunks
+    await page.mouse.wheel(0, 400);
   }
 
   await expect(page.getByTestId('app-status')).toBeVisible();
@@ -106,6 +106,74 @@ test('procedural world reaches Global, Regional and Lokal without console errors
     .toBeLessThan(1.5);
   await canvas.dispatchEvent('wheel', { deltaY: 3_000 });
   await expect(canvas).toHaveAttribute('data-lod-level', 'global');
+
+  expect(pageErrors).toEqual([]);
+});
+
+test('procedural terrain exposes relief, complete terrain groups and bounded detail LOD', async (
+  { page },
+  testInfo,
+) => {
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+  await page.goto('/?world=procedural');
+  const canvas = page.locator('canvas.viewport-canvas');
+
+  await expect(canvas).toHaveAttribute('data-lod-level', 'global');
+  await expect(canvas).toHaveAttribute('data-detail-instances', '0');
+  await expect(canvas).toHaveAttribute('data-terrain-groups', /water/);
+  await expect(canvas).toHaveAttribute('data-terrain-groups', /coast/);
+  await expect(canvas).toHaveAttribute('data-terrain-groups', /forest/);
+  await expect(canvas).toHaveAttribute('data-terrain-groups', /dry/);
+  await expect(canvas).toHaveAttribute('data-terrain-groups', /cold/);
+  await expect(canvas).toHaveAttribute('data-terrain-groups', /wetland/);
+  await expect
+    .poll(async () => Number(await canvas.getAttribute('data-relief-minimum')))
+    .toBeLessThan(1);
+  await expect
+    .poll(async () => Number(await canvas.getAttribute('data-relief-maximum')))
+    .toBeGreaterThan(1);
+  await testInfo.attach('issue-80-global', {
+    body: await page.screenshot(),
+    contentType: 'image/png',
+  });
+
+  await canvas.dispatchEvent('wheel', { deltaY: -400 });
+  await expect(canvas).toHaveAttribute('data-lod-level', 'regional');
+  await expect
+    .poll(async () => Number(await canvas.getAttribute('data-detail-instances')))
+    .toBeGreaterThan(0);
+  await testInfo.attach('issue-80-regional', {
+    body: await page.screenshot(),
+    contentType: 'image/png',
+  });
+
+  await canvas.dispatchEvent('wheel', { deltaY: -650 });
+  await expect(canvas).toHaveAttribute('data-lod-level', 'local', { timeout: 15_000 });
+  const localInstances = await expect
+    .poll(async () => Number(await canvas.getAttribute('data-detail-instances')))
+    .toBeGreaterThan(0);
+  void localInstances;
+  await expect
+    .poll(async () => Number(await canvas.getAttribute('data-detail-draw-calls')))
+    .toBeLessThanOrEqual(12);
+  await expect
+    .poll(async () => Number(await canvas.getAttribute('data-render-draw-calls')))
+    .toBeLessThanOrEqual(15);
+  await testInfo.attach('issue-80-local', {
+    body: await page.screenshot(),
+    contentType: 'image/png',
+  });
+
+  const firstLocalCount = Number(await canvas.getAttribute('data-detail-instances'));
+  await canvas.dispatchEvent('wheel', { deltaY: 3_000 });
+  await expect(canvas).toHaveAttribute('data-lod-level', 'global');
+  await expect(canvas).toHaveAttribute('data-detail-instances', '0');
+  await canvas.dispatchEvent('wheel', { deltaY: -1_100 });
+  await expect(canvas).toHaveAttribute('data-lod-level', 'local', { timeout: 15_000 });
+  await expect
+    .poll(async () => Number(await canvas.getAttribute('data-detail-instances')))
+    .toBe(firstLocalCount);
 
   expect(pageErrors).toEqual([]);
 });
