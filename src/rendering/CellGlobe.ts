@@ -70,8 +70,7 @@ export function createCellGlobeGeometryData(
         : shadeRgb(topColor, podium.sideColorFactor);
     const topNormal =
       surfaceMode === 'tangent-plane' || podium !== undefined ? cell.center : undefined;
-    const topVertexNormal =
-      topNormal === undefined ? normalize : (_vertex: Vector3): Vector3 => topNormal;
+    const topVertexNormal = topNormal === undefined ? normalize : (): Vector3 => topNormal;
     const topCenter = surfaceVertex(
       cell.center,
       cell.id,
