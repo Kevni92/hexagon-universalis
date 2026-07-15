@@ -17,6 +17,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:e2e": "playwright test",
+    "lod:budget": "node scripts/world-lod-budget.mjs",
     "data:build": "node scripts/data/tile-pyramid.mjs",
     "data:verify": "node scripts/data/verify-tile-pyramid.mjs"
   },
