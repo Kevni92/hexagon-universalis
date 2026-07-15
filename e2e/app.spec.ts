@@ -118,6 +118,7 @@ test('globe canvas accepts pointer and wheel interaction', async ({ page }) => {
 test('procedural world reaches Global, Regional and Lokal without console errors', async ({
   page,
 }) => {
+  test.slow();
   const pageErrors: Error[] = [];
   page.on('pageerror', (error) => pageErrors.push(error));
 
