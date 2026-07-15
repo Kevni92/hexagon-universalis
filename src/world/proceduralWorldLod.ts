@@ -148,7 +148,10 @@ export class ProceduralWorldLod {
   }
 
   public get cacheStats(): ProceduralLodCacheStats {
-    return { projectedCells: this.projectedById.size, generation: this.generation };
+    return {
+      projectedCells: this.projectedById.size,
+      generation: this.generation,
+    };
   }
 
   public update(camera: CameraState): readonly VisibleUnit[] {
@@ -196,7 +199,10 @@ export class ProceduralWorldLod {
    */
   public reconfigure(config: Partial<ProceduralWorldConfig>): void {
     this.assertActive();
-    const next = normalizeProceduralWorldConfig({ ...this.configValue, ...config });
+    const next = normalizeProceduralWorldConfig({
+      ...this.configValue,
+      ...config,
+    });
     if (JSON.stringify(next) === JSON.stringify(this.configValue)) return;
     const densityChanged = next.density !== this.configValue.density;
     const nextReferenceWorld = createProceduralWorld(next);
