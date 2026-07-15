@@ -12,12 +12,13 @@ export interface CellGlobeGeometryData {
   readonly triangleCount: number;
 }
 
-const CELL_GAP_FACTOR = 0.985;
+export type CellSurfaceMode = 'spherical' | 'tangent-plane';
 
 export function createCellGlobeGeometryData(
   topology: GeodesicTopology,
   radius = topology.radius,
   cellColors?: ReadonlyMap<string, string>,
+  surfaceMode: CellSurfaceMode = 'spherical',
 ): CellGlobeGeometryData {
   if (!Number.isFinite(radius) || radius <= 0)
     throw new RangeError('radius muss größer als 0 sein.');
@@ -30,14 +31,15 @@ export function createCellGlobeGeometryData(
   for (const cell of topology.cells) {
     for (let index = 0; index < cell.boundary.length; index += 1) {
       const nextIndex = (index + 1) % cell.boundary.length;
-      const first = scale(at(cell.boundary, index), CELL_GAP_FACTOR);
-      const second = scale(at(cell.boundary, nextIndex), CELL_GAP_FACTOR);
       const center = cell.center;
+      const first = surfacePoint(at(cell.boundary, index), center, surfaceMode);
+      const second = surfacePoint(at(cell.boundary, nextIndex), center, surfaceMode);
       const normal = triangleNormal(center, first, second);
       const triangle = dot(normal, center) >= 0 ? [center, first, second] : [center, second, first];
       for (const vertex of triangle) {
         positions.push(vertex.x * radius, vertex.y * radius, vertex.z * radius);
-        normals.push(vertex.x, vertex.y, vertex.z);
+        const vertexNormal = surfaceMode === 'tangent-plane' ? center : vertex;
+        normals.push(vertexNormal.x, vertexNormal.y, vertexNormal.z);
         if (cellColors !== undefined)
           colors.push(...hexToRgb(cellColors.get(cell.id) ?? '#173b68'));
       }
@@ -74,7 +76,7 @@ export function createCellGlobeMesh(
 
   const material = new THREE.MeshStandardMaterial({
     color: cellColors !== undefined ? 0xffffff : 0x4f8cff,
-    flatShading: true,
+    flatShading: false,
     roughness: 0.72,
     metalness: 0.08,
     side: THREE.FrontSide,
@@ -87,8 +89,14 @@ export function createCellGlobeMesh(
   return mesh;
 }
 
-function scale(vector: Vector3, factor: number): Vector3 {
-  return { x: vector.x * factor, y: vector.y * factor, z: vector.z * factor };
+function surfacePoint(boundary: Vector3, center: Vector3, surfaceMode: CellSurfaceMode): Vector3 {
+  if (surfaceMode === 'spherical') return boundary;
+  const planeOffset = 1 - dot(boundary, center);
+  return {
+    x: boundary.x + center.x * planeOffset,
+    y: boundary.y + center.y * planeOffset,
+    z: boundary.z + center.z * planeOffset,
+  };
 }
 
 function subtract(first: Vector3, second: Vector3): Vector3 {

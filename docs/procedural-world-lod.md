@@ -21,6 +21,12 @@ global beziehungsweise regional. Die Fallbackfläche schließt die nicht deckung
 der Voronoi-Stufen, ohne schwarze Löcher. Picking kann anhand des Levels immer das oberste Tile
 priorisieren.
 
+Die Lokalstufe verwendet zusätzlich echte Tangentialflächen: Jeder geodätische Randpunkt wird
+auf die Tangentialebene am Zellzentrum projiziert. Mittelpunkt und sämtliche Randpunkte eines
+Hexagons sind damit koplanar und teilen dieselbe nach außen gerichtete Normale. Das Zellzentrum
+und diese Normale bilden den stabilen lokalen Frame für spätere Bäume, Berge, Gebäude und andere
+Modelle. Global und Regional behalten ihre kugelförmige Oberfläche.
+
 ## Dichte-, Schwellen- und Budgetprofile
 
 Die ausgewählte Dichte bezeichnet die globale Referenzauflösung aus #77. Regional und Lokal
@@ -55,6 +61,7 @@ veraltete Ergebnisse zu erkennen; die heutige Generierung selbst ist synchron.
 
 Automatisierte Tests decken alle drei erreichbaren Stufen, deterministische stufenübergreifende
 Referenzwerte, strikt sinkende mittlere Zellradien, selektive Sichtfeld-Overlays, qualifizierte
-Picking-IDs, Hysterese, Cacheinvalidierung und Dispose ab. Im Browser kann die aktive Stufe für E2E- und
+Picking-IDs, koplanare Lokalvertices mit einheitlicher Flächennormale, Hysterese,
+Cacheinvalidierung und Dispose ab. Im Browser kann die aktive Stufe für E2E- und
 Diagnosezwecke über `canvas[data-lod-level]` gelesen werden. Das sichtbare Bedienpanel folgt in
 #79; vollständiges Terrainrelief und Detailrendering folgen in #80.

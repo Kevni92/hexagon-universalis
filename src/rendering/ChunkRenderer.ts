@@ -110,6 +110,7 @@ export class ChunkRenderer {
       topology,
       this.radius + unit.level * 0.003,
       this.cellColors,
+      unit.level === 2 ? 'tangent-plane' : 'spherical',
     );
 
     const geometry = new THREE.BufferGeometry();
@@ -121,7 +122,7 @@ export class ChunkRenderer {
 
     const material = new THREE.MeshStandardMaterial({
       color: this.cellColors !== undefined ? 0xffffff : 0x4f8cff,
-      flatShading: true,
+      flatShading: false,
       roughness: 0.72,
       metalness: 0.08,
       side: THREE.FrontSide,
