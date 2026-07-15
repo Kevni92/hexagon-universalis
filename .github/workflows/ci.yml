@@ -43,7 +43,23 @@ jobs:
         run: npm run typecheck
 
       - name: Test
-        run: npm run test:run
+        id: test
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:run 2>&1 | tee test.log
+
+      - name: Upload test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-diagnostics
+          path: test.log
+          if-no-files-found: error
+
+      - name: Fail on test errors
+        if: steps.test.outcome == 'failure'
+        run: exit 1
 
       - name: Build
         run: npm run build
