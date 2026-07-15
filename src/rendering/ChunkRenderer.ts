@@ -2,9 +2,12 @@ import * as THREE from 'three';
 
 import type { GeodesicCell, GeodesicTopology, Vector3 } from '@/topology/geodesic';
 import { visibleCellId, type VisibleUnit } from '@/topology/lod/WorldLod';
-import { createCellGlobeGeometryData } from './CellGlobe';
+import { createCellGlobeGeometryData, type CellPodiumOptions } from './CellGlobe';
 
 export type ChunkSurfaceRadius = (position: Vector3, level: 0 | 1 | 2, cellId: string) => number;
+
+const PODIUM_BASE_RADIUS_FACTOR = 0.975;
+const PODIUM_INSET_BY_LEVEL = [0.99, 0.97, 0.94] as const;
 
 /**
  * Rendert eine stabile Liste sichtbarer Zell-Chunks (`VisibleUnit[]`) als
@@ -45,6 +48,14 @@ export class ChunkRenderer {
           ? new Set(mesh.userData.cellIds as readonly string[]).size
           : 0;
     return total;
+  }
+
+  public get activeTopTriangleCount(): number {
+    return this.sumTriangleMetadata('topTriangleCount');
+  }
+
+  public get activeSideTriangleCount(): number {
+    return this.sumTriangleMetadata('sideTriangleCount');
   }
 
   /** Alle aktuell über Chunk-Meshes referenzierten globalen CellIds (für Picking-Validierung). */
@@ -110,14 +121,23 @@ export class ChunkRenderer {
   ): THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial> {
     const topology = unitToTopology(unit);
     const surfaceRadius = this.surfaceRadius;
+    const podiumOptions: CellPodiumOptions | undefined =
+      surfaceRadius === undefined
+        ? undefined
+        : {
+            baseRadius: this.radius * PODIUM_BASE_RADIUS_FACTOR,
+            topInset: PODIUM_INSET_BY_LEVEL[unit.level],
+            sideColorFactor: 0.62,
+          };
     const data = createCellGlobeGeometryData(
       topology,
       this.radius + unit.level * 0.003,
       this.cellColors,
-      unit.level === 2 ? 'tangent-plane' : 'spherical',
+      surfaceRadius === undefined && unit.level === 2 ? 'tangent-plane' : 'spherical',
       surfaceRadius === undefined
         ? undefined
         : (position, cellId) => surfaceRadius(position, unit.level, cellId),
+      podiumOptions,
     );
 
     const geometry = new THREE.BufferGeometry();
@@ -140,9 +160,17 @@ export class ChunkRenderer {
     mesh.name = unit.key;
     mesh.userData.cellIds = data.cellIds;
     mesh.userData.triangleCount = data.triangleCount;
+    mesh.userData.topTriangleCount = data.topTriangleCount;
+    mesh.userData.sideTriangleCount = data.sideTriangleCount;
     mesh.userData.level = unit.level;
     mesh.userData.unitSignature = unitSignature(unit);
     return mesh;
+  }
+
+  private sumTriangleMetadata(key: 'topTriangleCount' | 'sideTriangleCount'): number {
+    let total = 0;
+    for (const mesh of this.meshesByKey.values()) total += Number(mesh.userData[key] ?? 0);
+    return total;
   }
 
   private disposeMesh(mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>): void {
