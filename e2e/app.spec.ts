@@ -203,20 +203,19 @@ test('low-density local relief remains closed from an oblique angle', async ({
   await zoomUntilLod(canvas, 'local', -400);
   const box = await canvas.boundingBox();
   expect(box).not.toBeNull();
-  if (box !== null) {
-    await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
-    await page.mouse.down();
-    await page.mouse.move(box.x + box.width * 0.68, box.y + box.height * 0.38, {
-      steps: 8,
-    });
-    await page.mouse.up();
-  }
+  if (box === null) return;
+  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.68, box.y + box.height * 0.38, {
+    steps: 8,
+  });
+  await page.mouse.up();
   await expect(canvas).toHaveAttribute('data-lod-level', 'local');
   await expect
     .poll(async () => Number(await canvas.getAttribute('data-render-draw-calls')))
     .toBeLessThanOrEqual(16);
   await testInfo.attach('issue-86-low-local-podiums', {
-    body: await canvas.screenshot(),
+    body: await page.screenshot({ clip: box }),
     contentType: 'image/png',
   });
   expect(pageErrors).toEqual([]);
