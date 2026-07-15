@@ -15,7 +15,9 @@ async function zoomUntilLod(
       () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
     );
   }
-  await expect(canvas).toHaveAttribute('data-lod-level', target, { timeout: 15_000 });
+  await expect(canvas).toHaveAttribute('data-lod-level', target, {
+    timeout: 15_000,
+  });
 }
 
 test('production app loads a usable globe viewport', async ({ page }) => {
@@ -207,7 +209,9 @@ test('low-density local relief remains closed from an oblique angle', async ({
   if (box !== null) {
     await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
     await page.mouse.down();
-    await page.mouse.move(box.x + box.width * 0.68, box.y + box.height * 0.38, { steps: 8 });
+    await page.mouse.move(box.x + box.width * 0.68, box.y + box.height * 0.38, {
+      steps: 8,
+    });
     await page.mouse.up();
   }
   await expect(canvas).toHaveAttribute('data-lod-level', 'local');
