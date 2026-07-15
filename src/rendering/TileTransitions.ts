@@ -101,7 +101,8 @@ export function createEdgeTransitionDetails(
   lod: TransitionLod,
 ): readonly TransitionDetail[] {
   const transition = createTransitionProfile(source, target);
-  if (transition.detailType === null || transition.compatibility === 'excluded') return [];
+  const detailType = transition.detailType;
+  if (detailType === null || transition.compatibility === 'excluded') return [];
   const count = Math.min(LOD_BUDGET[lod], Math.round(LOD_BUDGET[lod] * transition.density));
   return Array.from({ length: count }, (_, index) => {
     const hash = stableHash(`${transition.edgeId}:${target.cellId}:${lod}:${index}`);
@@ -112,7 +113,7 @@ export function createEdgeTransitionDetails(
     return {
       edgeId: transition.edgeId,
       ownerCellId: target.cellId,
-      detailType: transition.detailType,
+      detailType,
       index,
       x: edgeX * (1 - inward),
       y: edgeY * (1 - inward),
