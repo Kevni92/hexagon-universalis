@@ -40,11 +40,11 @@ Die Standardkonfiguration weist im Renderer alle verpflichtenden Gruppen aus: Wa
 
 ## Detail-LOD und Budgets
 
-| Stufe | Zellflächen | Basisdetails | Kantenübergänge |
-| --- | ---: | ---: | ---: |
-| Global | gebündelt | keine | keine |
-| Regional | gebündelt | 1 je geeigneter sichtbarer Zelle | bis 2 je geeigneter Kante |
-| Lokal | gebündelt, tangential | 3 je geeigneter sichtbarer Zelle | bis 10 je geeigneter Kante |
+| Stufe    | Zellflächen           | Basisdetails                     | Kantenübergänge            |
+| -------- | --------------------- | -------------------------------- | -------------------------- |
+| Global   | gebündelt             | keine                            | keine                      |
+| Regional | gebündelt             | 1 je geeigneter sichtbarer Zelle | bis 2 je geeigneter Kante  |
+| Lokal    | gebündelt, tangential | 3 je geeigneter sichtbarer Zelle | bis 10 je geeigneter Kante |
 
 Zusätzlich gelten die festen globalen Instanzobergrenzen aus `detailTypeBudgets()`. Sie verhindern, dass dichte Wälder oder viele Übergangskanten die Instanzzahl unbeschränkt erhöhen. Es entstehen höchstens:
 
