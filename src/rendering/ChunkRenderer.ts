@@ -4,11 +4,7 @@ import type { GeodesicCell, GeodesicTopology, Vector3 } from '@/topology/geodesi
 import { visibleCellId, type VisibleUnit } from '@/topology/lod/WorldLod';
 import { createCellGlobeGeometryData } from './CellGlobe';
 
-export type ChunkSurfaceRadius = (
-  position: Vector3,
-  level: 0 | 1 | 2,
-  cellId: string,
-) => number;
+export type ChunkSurfaceRadius = (position: Vector3, level: 0 | 1 | 2, cellId: string) => number;
 
 /**
  * Rendert eine stabile Liste sichtbarer Zell-Chunks (`VisibleUnit[]`) als
