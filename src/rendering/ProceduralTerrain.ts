@@ -1,5 +1,4 @@
-import { TILE_PROFILES, type TileModifier, type TileType } from '@/data/tileCatalog';
-import type { Vector3 } from '@/topology/geodesic';
+import { TILE_PROFILES, type TileType } from '@/data/tileCatalog';
 import type { ProceduralWorldCell } from '@/world/proceduralWorld';
 import type { ProceduralWorldLodLevel } from '@/world/proceduralWorldLod';
 
@@ -37,7 +36,7 @@ const WATER_TYPES = new Set<TileType>([
   'coastalWater',
   'iceWater',
 ]);
-const OPEN_LAND_TYPES = new Set<TileType>(['temperateGrassland', 'steppe', 'savanna']);
+const OPEN_LAND_TYPES = new Set<TileType>(['temperateGrassland', 'cropland', 'steppe', 'savanna']);
 const DRY_TYPES = new Set<TileType>(['desert', 'semiDesert']);
 
 export interface ProceduralTerrainDiagnostics {
@@ -54,17 +53,16 @@ export function proceduralElevationMeters(elevation: number): number {
   return clamped >= 0 ? clamped * 9000 : clamped * 11000;
 }
 
-export function proceduralSurfaceRadius(
-  elevation: number,
-  level: ProceduralWorldLodLevel,
-): number {
+export function proceduralSurfaceRadius(elevation: number, level: ProceduralWorldLodLevel): number {
   return (
     elevationToRadius(proceduralElevationMeters(elevation), PROCEDURAL_RELIEF_PROFILE) +
     LOD_SURFACE_OFFSET[level]
   );
 }
 
-export function proceduralTileColor(cell: Pick<ProceduralWorldCell, 'tileType' | 'modifiers'>): string {
+export function proceduralTileColor(
+  cell: Pick<ProceduralWorldCell, 'tileType' | 'modifiers'>,
+): string {
   let color = TILE_PROFILES[cell.tileType].color;
   if (cell.modifiers.includes('glacier')) return blendHex(color, '#e5f8ff', 0.78);
   if (cell.modifiers.includes('snowCover')) color = blendHex(color, '#f1f5f2', 0.58);
@@ -106,12 +104,6 @@ export function proceduralTerrainDiagnostics(
     minimumRadius: Math.min(...radii),
     maximumRadius: Math.max(...radii),
   };
-}
-
-export function normalizeDirection(vector: Vector3): Vector3 {
-  const length = Math.hypot(vector.x, vector.y, vector.z);
-  if (!Number.isFinite(length) || length <= 0) throw new RangeError('Richtung muss endlich sein.');
-  return { x: vector.x / length, y: vector.y / length, z: vector.z / length };
 }
 
 function reliefGroup(relief: ProceduralWorldCell['relief']): string {
