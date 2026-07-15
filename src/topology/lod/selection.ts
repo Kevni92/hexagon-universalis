@@ -23,6 +23,94 @@ export interface CameraState {
   readonly aspect?: number;
 }
 
+/** Kandidat für eine budgetierte, fokuszentrierte Parent-Auswahl. */
+export interface FocusSelectionCandidate {
+  readonly key: number;
+  /** Skalarprodukt von Zellzentrum und zentralem Fokuspunkt; größer liegt näher an der Bildmitte. */
+  readonly focusAlignment: number;
+  /** Mittlerer Winkelradius der Elternzelle auf der Einheitskugel. */
+  readonly angularRadius: number;
+  /** Projizierte Größe als deterministischer sekundärer Sortierschlüssel. */
+  readonly projectedSizePx: number;
+}
+
+const DEFAULT_FOCUS_SWITCH_HYSTERESIS_FACTOR = 0.18;
+
+/**
+ * Bestimmt den vom zentralen Kamerastrahl getroffenen Punkt auf der Kugel und
+ * liefert dessen normalisierte Richtung im selben lokalen Weltkoordinatensystem
+ * wie die LOD-Zellzentren. Der Fokus ist dadurch unabhängig von der
+ * Kameradistanz und bleibt beim reinen Zoomen räumlich stabil.
+ */
+export function cameraFocusDirection(camera: CameraState): Vector3 {
+  const forward = normalizeOrNull(camera.forward);
+  const cameraDirection = normalizeOrNull(camera.position);
+  if (forward === null) return cameraDirection ?? { x: 0, y: 0, z: 1 };
+
+  if (Number.isFinite(camera.sphereRadius) && camera.sphereRadius > 0) {
+    const linear = 2 * dot(camera.position, forward);
+    const constant = dot(camera.position, camera.position) - camera.sphereRadius ** 2;
+    const discriminant = linear * linear - 4 * constant;
+    if (discriminant >= 0) {
+      const root = Math.sqrt(Math.max(0, discriminant));
+      const near = (-linear - root) / 2;
+      const far = (-linear + root) / 2;
+      const distance = near >= 0 ? near : far >= 0 ? far : null;
+      if (distance !== null) {
+        const hit = normalizeOrNull(add(camera.position, scale(forward, distance)));
+        if (hit !== null) return hit;
+      }
+    }
+  }
+
+  // Defensiver Fallback für einen Strahl, der die Kugel nicht trifft: der dem
+  // Ursprung nächste Punkt des Vorwärtsstrahls bleibt ebenfalls zoomstabil.
+  const closestDistance = Math.max(0, -dot(camera.position, forward));
+  return (
+    normalizeOrNull(add(camera.position, scale(forward, closestDistance))) ??
+    cameraDirection ??
+    scale(forward, -1)
+  );
+}
+
+/**
+ * Begrenzt verfeinerungswillige Eltern auf das Chunkbudget und priorisiert
+ * räumlich die Bildmitte. Bereits aktive Eltern bleiben innerhalb eines kleinen,
+ * aus ihrem Zellwinkel abgeleiteten Hysteresebands erhalten. Dadurch wechselt
+ * die Auswahl erst klar hinter einer räumlichen Zellgrenze, statt an nahezu
+ * gleich bewerteten Kandidaten zu flackern.
+ */
+export function selectFocusedCandidateKeys(
+  candidates: readonly FocusSelectionCandidate[],
+  previousSelection: ReadonlySet<number>,
+  maxActiveChunks: number,
+  hysteresisFactor = DEFAULT_FOCUS_SWITCH_HYSTERESIS_FACTOR,
+): ReadonlySet<number> {
+  const limit = Math.max(0, Math.min(Math.trunc(maxActiveChunks), candidates.length));
+  if (limit === 0) return new Set();
+
+  const ordered = [...candidates].sort(compareFocusCandidates);
+  const cutoff = ordered[limit - 1];
+  if (cutoff === undefined) return new Set();
+  const cutoffAngle = Math.acos(clamp(cutoff.focusAlignment, -1, 1));
+  const factor = Number.isFinite(hysteresisFactor) ? Math.max(0, hysteresisFactor) : 0;
+  const selected = new Set<number>();
+
+  for (const candidate of ordered) {
+    if (!previousSelection.has(candidate.key)) continue;
+    const candidateAngle = Math.acos(clamp(candidate.focusAlignment, -1, 1));
+    const margin = Math.max(candidate.angularRadius, cutoff.angularRadius) * factor;
+    if (candidateAngle <= cutoffAngle + margin) selected.add(candidate.key);
+    if (selected.size >= limit) return selected;
+  }
+
+  for (const candidate of ordered) {
+    selected.add(candidate.key);
+    if (selected.size >= limit) break;
+  }
+  return selected;
+}
+
 /**
  * Horizont-/Rückseiten-Culling: eine Zelle auf der von der Kamera
  * abgewandten Seite der Kugel ist nicht sichtbar. Reine 3D-Vektor-Prüfung
@@ -177,6 +265,17 @@ export function selectVisibleCells(
   return visible.slice(0, config.maxActiveChunks).map((entry) => entry.lodCell);
 }
 
+function compareFocusCandidates(
+  left: FocusSelectionCandidate,
+  right: FocusSelectionCandidate,
+): number {
+  if (left.focusAlignment !== right.focusAlignment)
+    return right.focusAlignment - left.focusAlignment;
+  if (left.projectedSizePx !== right.projectedSizePx)
+    return right.projectedSizePx - left.projectedSizePx;
+  return left.key - right.key;
+}
+
 function estimateWorldRadius(
   boundary: readonly Vector3[],
   center: Vector3,
@@ -196,12 +295,22 @@ function dot(first: Vector3, second: Vector3): number {
   return first.x * second.x + first.y * second.y + first.z * second.z;
 }
 
+function add(first: Vector3, second: Vector3): Vector3 {
+  return { x: first.x + second.x, y: first.y + second.y, z: first.z + second.z };
+}
+
 function subtract(first: Vector3, second: Vector3): Vector3 {
   return { x: first.x - second.x, y: first.y - second.y, z: first.z - second.z };
 }
 
 function scale(vector: Vector3, factor: number): Vector3 {
   return { x: vector.x * factor, y: vector.y * factor, z: vector.z * factor };
+}
+
+function normalizeOrNull(vector: Vector3): Vector3 | null {
+  const vectorLength = length(vector);
+  if (!Number.isFinite(vectorLength) || vectorLength <= 0) return null;
+  return scale(vector, 1 / vectorLength);
 }
 
 function length(vector: Vector3): number {
