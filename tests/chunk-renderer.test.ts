@@ -35,7 +35,7 @@ describe('ChunkRenderer', () => {
     expect(renderer.activeCellIds.size).toBe(2);
   });
 
-  it('applies relief radii per stable picking cell without adding draw calls', () => {
+  it('applies relief podiums per stable picking cell without adding draw calls', () => {
     const units = unitsFromPatchCells(2);
     const liftedCellId = units[0]?.cells[0]?.formattedId;
     if (liftedCellId === undefined) throw new Error('missing lifted cell');
@@ -49,19 +49,62 @@ describe('ChunkRenderer', () => {
     expect(renderer.activeCellIds).toEqual(
       new Set(units.map((unit) => unit.cells[0]!.formattedId)),
     );
+    expect(renderer.activeSideTriangleCount).toBeGreaterThan(0);
     const radiiByMesh = new Map(
       renderer.meshes.map((mesh) => {
         const positions = mesh.geometry.getAttribute('position');
-        const radii = Array.from({ length: positions.count }, (_, index) =>
+        const topVertexCount = Number(mesh.userData.topTriangleCount) * 3;
+        const topRadii = Array.from({ length: topVertexCount }, (_, index) =>
           Math.hypot(positions.getX(index), positions.getY(index), positions.getZ(index)),
         );
-        return [mesh.name, { minimum: Math.min(...radii), maximum: Math.max(...radii) }] as const;
+        const allRadii = Array.from({ length: positions.count }, (_, index) =>
+          Math.hypot(positions.getX(index), positions.getY(index), positions.getZ(index)),
+        );
+        return [
+          mesh.name,
+          {
+            topMinimum: Math.min(...topRadii),
+            topMaximum: Math.max(...topRadii),
+            minimum: Math.min(...allRadii),
+          },
+        ] as const;
       }),
     );
-    expect(radiiByMesh.get('unit-0')?.minimum).toBeCloseTo(1.08, 6);
-    expect(radiiByMesh.get('unit-0')?.maximum).toBeCloseTo(1.08, 6);
-    expect(radiiByMesh.get('unit-1')?.minimum).toBeCloseTo(0.98, 6);
-    expect(radiiByMesh.get('unit-1')?.maximum).toBeCloseTo(0.98, 6);
+    expect(radiiByMesh.get('unit-0')?.topMinimum).toBeCloseTo(1.08, 6);
+    expect(radiiByMesh.get('unit-0')?.topMaximum).toBeCloseTo(1.08, 6);
+    expect(radiiByMesh.get('unit-1')?.topMinimum).toBeCloseTo(0.98, 6);
+    expect(radiiByMesh.get('unit-1')?.topMaximum).toBeCloseTo(0.98, 6);
+    expect(radiiByMesh.get('unit-0')?.minimum).toBeCloseTo(0.975, 6);
+    expect(radiiByMesh.get('unit-1')?.minimum).toBeCloseTo(0.975, 6);
+  });
+
+  it('keeps local relief vertices radially bounded and adds two side faces per edge', () => {
+    const cell = createGlobalPatch(4).cells[0];
+    if (cell === undefined) throw new Error('missing local cell');
+    const cellId = 'lvl2-local/g0/p0/c0';
+    const unit: VisibleUnit = {
+      key: 'lvl2-local/g0/p0',
+      level: 2,
+      cells: [cell],
+      cellIds: [cellId],
+    };
+    const renderer = new ChunkRenderer(1, new Map([[cellId, '#809060']]), () => 1.08);
+
+    renderer.update([unit]);
+
+    const mesh = renderer.meshes[0];
+    if (mesh === undefined) throw new Error('missing local mesh');
+    const positions = mesh.geometry.getAttribute('position');
+    const radii = Array.from({ length: positions.count }, (_, index) =>
+      Math.hypot(positions.getX(index), positions.getY(index), positions.getZ(index)),
+    );
+    expect(Math.max(...radii)).toBeLessThanOrEqual(1.080001);
+    expect(Math.min(...radii)).toBeCloseTo(0.975, 6);
+    expect(mesh.userData.topTriangleCount).toBe(cell.cell.boundary.length);
+    expect(mesh.userData.sideTriangleCount).toBe(cell.cell.boundary.length * 2);
+    expect(mesh.userData.triangleCount).toBe(cell.cell.boundary.length * 3);
+    expect(new Set(mesh.userData.cellIds as readonly string[])).toEqual(new Set([cellId]));
+    expect(renderer.activeChunkCount).toBe(1);
   });
 
   it('differentially adds and removes chunks without rebuilding unchanged ones', () => {
