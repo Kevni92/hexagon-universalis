@@ -36,8 +36,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Apply Prettier
-        run: npm run format
+      - name: Apply Prettier and capture diagnostics
+        run: npm run format > format-issue-88.log 2>&1 || true
+
+      - name: Upload formatter diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: format-issue-88-log
+          path: format-issue-88.log
 
       - name: Commit formatting
         run: |
