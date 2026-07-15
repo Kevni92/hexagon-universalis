@@ -8,10 +8,13 @@ import {
 } from './hierarchy';
 import type { QualityProfile } from './profiles';
 import {
+  cameraFocusDirection,
   isCellVisible,
   projectedCellSizePx,
   RefinementController,
+  selectFocusedCandidateKeys,
   type CameraState,
+  type FocusSelectionCandidate,
 } from './selection';
 
 /**
@@ -32,6 +35,11 @@ export function visibleCellId(unit: VisibleUnit, index: number): string {
   return unit.cellIds?.[index] ?? unit.cells[index]?.formattedId ?? '';
 }
 
+interface RefinementEntry extends FocusSelectionCandidate {
+  readonly cell: LodCell;
+  readonly sizePx: number;
+}
+
 /**
  * Orchestriert Multi-Level-Auswahl: hält das immer resident gehaltene
  * Level-0-Patch, entscheidet je Level-0-Zelle per Hysterese, ob sie durch
@@ -46,6 +54,8 @@ export class WorldLodController {
   private readonly localController: RefinementController;
   private readonly regionalChunkCache = new Map<number, LodChunk>();
   private readonly localChunkCache = new Map<string, LodChunk>();
+  private regionalFocusSelection = new Set<number>();
+  private localFocusSelection = new Set<number>();
 
   public constructor(private readonly profile: QualityProfile) {
     this.globalPatch = createGlobalPatch(profile.levels.global.frequency);
@@ -64,7 +74,7 @@ export class WorldLodController {
    *
    * Ablauf je Ebene: (1) sichtbare Elternzellen sammeln, (2) Hysterese je
    * Elternzelle auswerten, (3) unter allen verfeinerungswilligen Eltern die
-   * projiziert größten (kameranächsten) bis zum `maxActiveChunks`-Budget
+   * dem zentralen Kamerastrahl nächsten bis zum `maxActiveChunks`-Budget
    * auswählen und nur diese durch ihre Kind-Chunks ersetzen. Nicht
    * verfeinerte Level-0-Zellen werden zu **einer** gebündelten Unit (ein
    * Mesh/Material), nie eine Unit pro Zelle (ADR: "kein Mesh und kein
@@ -72,25 +82,34 @@ export class WorldLodController {
    */
   public update(camera: CameraState): readonly VisibleUnit[] {
     const units: VisibleUnit[] = [];
+    const focusDirection = cameraFocusDirection(camera);
     const globalParentCenters = this.globalPatch.cells.map((lodCell) => lodCell.cell.center);
 
     // Ebene 0: sichtbare globale Zellen + Hysterese; Budget-Auswahl der zu verfeinernden Eltern.
-    const visibleGlobal = this.globalPatch.cells
+    const visibleGlobal: RefinementEntry[] = this.globalPatch.cells
       .filter((globalCell) => isCellVisible(globalCell.cell.center, camera))
-      .map((globalCell) => ({
-        cell: globalCell,
-        sizePx: projectedCellSizePx(
+      .map((globalCell) => {
+        const angularRadius = estimateAngularRadius(globalCell);
+        const sizePx = projectedCellSizePx(
           globalCell.cell.center,
-          estimateWorldRadius(globalCell, camera.sphereRadius),
+          angularRadius * camera.sphereRadius,
           camera,
-        ),
-      }));
+        );
+        return {
+          cell: globalCell,
+          key: globalCell.id.index,
+          sizePx,
+          projectedSizePx: sizePx,
+          angularRadius,
+          focusAlignment: clampDot(globalCell.cell.center, focusDirection),
+        };
+      });
 
     const refinedGlobal = this.selectRefinedParents(
       visibleGlobal,
-      (entry) => entry.cell.id.index,
       this.regionalController,
       this.profile.levels.regional.maxActiveChunks,
+      this.regionalFocusSelection,
     );
 
     const activeRegionalParents = new Set<number>();
@@ -118,6 +137,7 @@ export class WorldLodController {
         globalCell,
         regionalChunk,
         camera,
+        focusDirection,
         units,
         activeLocalParents,
         activeLocalHashes,
@@ -129,6 +149,8 @@ export class WorldLodController {
     if (coarseGlobalCells.length > 0)
       units.push({ key: 'lvl0-global/root', level: 0, cells: coarseGlobalCells });
 
+    this.regionalFocusSelection = new Set(activeRegionalParents);
+    this.localFocusSelection = new Set(activeLocalHashes);
     this.regionalController.prune(activeRegionalParents);
     this.localController.prune(activeLocalHashes);
     this.pruneRegionalCache(activeRegionalParents);
@@ -147,6 +169,7 @@ export class WorldLodController {
     globalCell: LodCell,
     regionalChunk: LodChunk,
     camera: CameraState,
+    focusDirection: Vector3,
     units: VisibleUnit[],
     activeLocalParents: Set<string>,
     activeLocalHashes: Set<number>,
@@ -154,22 +177,31 @@ export class WorldLodController {
   ): number {
     const regionalParentCenters = regionalChunk.cells.map((lodCell) => lodCell.cell.center);
 
-    const visibleRegional = regionalChunk.cells
+    const visibleRegional: RefinementEntry[] = regionalChunk.cells
       .filter((regionalCell) => isCellVisible(regionalCell.cell.center, camera))
-      .map((regionalCell) => ({
-        cell: regionalCell,
-        sizePx: projectedCellSizePx(
+      .map((regionalCell) => {
+        const key = hashParentKey(globalCell.id.index, regionalCell.id.index);
+        const angularRadius = estimateAngularRadius(regionalCell);
+        const sizePx = projectedCellSizePx(
           regionalCell.cell.center,
-          estimateWorldRadius(regionalCell, camera.sphereRadius),
+          angularRadius * camera.sphereRadius,
           camera,
-        ),
-      }));
+        );
+        return {
+          cell: regionalCell,
+          key,
+          sizePx,
+          projectedSizePx: sizePx,
+          angularRadius,
+          focusAlignment: clampDot(regionalCell.cell.center, focusDirection),
+        };
+      });
 
     const refinedRegional = this.selectRefinedParents(
       visibleRegional,
-      (entry) => hashParentKey(globalCell.id.index, entry.cell.id.index),
       this.localController,
       remainingLocalChunkBudget,
+      this.localFocusSelection,
     );
 
     // Nicht sichtbare Regional-Zellen bleiben Teil des gebündelten Level-1-Rests
@@ -182,7 +214,7 @@ export class WorldLodController {
     for (const entry of visibleRegional) {
       const regionalCell = entry.cell;
       const localKey = `${globalCell.id.index}:${regionalCell.id.index}`;
-      const localHash = hashParentKey(globalCell.id.index, regionalCell.id.index);
+      const localHash = entry.key;
 
       if (!refinedRegional.has(localHash)) {
         coarseRegionalCells.push(regionalCell);
@@ -221,23 +253,21 @@ export class WorldLodController {
   }
 
   /**
-   * Wendet Hysterese je Elternzelle an und begrenzt die tatsächlich
-   * verfeinerten Eltern auf `maxActiveChunks`. Priorisiert werden die
-   * projiziert größten (kameranächsten) Kandidaten – so bleibt die Draw-Call-
-   * Zahl an das Budget gebunden, unabhängig von der adressierbaren Zellzahl.
+   * Wendet Pixelhysterese je Elternzelle an und begrenzt die tatsächlich
+   * verfeinerten Eltern auf `maxActiveChunks`. Die Budgetauswahl folgt dem
+   * zentralen Kamerafokus; bereits aktive Kandidaten erhalten zusätzlich eine
+   * kleine räumliche Hysterese gegen Flackern an Zellgrenzen.
    */
-  private selectRefinedParents<T extends { readonly sizePx: number }>(
-    candidates: readonly T[],
-    keyOf: (entry: T) => number,
+  private selectRefinedParents(
+    candidates: readonly RefinementEntry[],
     controller: RefinementController,
     maxActiveChunks: number,
+    previousSelection: ReadonlySet<number>,
   ): ReadonlySet<number> {
     const wantsRefinement = candidates.filter(
-      (entry) => controller.update(keyOf(entry), entry.sizePx) === 'refined',
+      (entry) => controller.update(entry.key, entry.sizePx) === 'refined',
     );
-    wantsRefinement.sort((left, right) => right.sizePx - left.sizePx);
-    const capped = wantsRefinement.slice(0, Math.max(0, maxActiveChunks));
-    return new Set(capped.map((entry) => keyOf(entry)));
+    return selectFocusedCandidateKeys(wantsRefinement, previousSelection, maxActiveChunks);
   }
 
   /** Setzt den kompletten Hysterese- und Chunk-Cache-Zustand zurück (z. B. bei Profilwechsel). */
@@ -246,6 +276,8 @@ export class WorldLodController {
     this.localController.reset();
     this.regionalChunkCache.clear();
     this.localChunkCache.clear();
+    this.regionalFocusSelection.clear();
+    this.localFocusSelection.clear();
   }
 
   private getOrCreateRegionalChunk(
@@ -385,13 +417,7 @@ export class SelectiveOverlayWorldLodController {
 
 function isFocusedCell(center: Vector3, camera: CameraState, angularRadius: number): boolean {
   if (!isCellVisible(center, camera)) return false;
-  const cameraLength = Math.hypot(camera.position.x, camera.position.y, camera.position.z);
-  if (cameraLength === 0) return false;
-  const focus = {
-    x: camera.position.x / cameraLength,
-    y: camera.position.y / cameraLength,
-    z: camera.position.z / cameraLength,
-  };
+  const focus = cameraFocusDirection(camera);
   return clampDot(center, focus) >= Math.cos(angularRadius);
 }
 
@@ -407,12 +433,15 @@ function maximumProjectedCellSize(cells: readonly LodCell[], camera: CameraState
   return maximum;
 }
 
-function estimateWorldRadius(lodCell: LodCell, sphereRadius: number): number {
+function estimateAngularRadius(lodCell: LodCell): number {
   const { center, boundary } = lodCell.cell;
   if (boundary.length === 0) return 0;
   const angles = boundary.map((point) => Math.acos(clampDot(center, point)));
-  const meanAngle = angles.reduce((sum, angle) => sum + angle, 0) / angles.length;
-  return meanAngle * sphereRadius;
+  return angles.reduce((sum, angle) => sum + angle, 0) / angles.length;
+}
+
+function estimateWorldRadius(lodCell: LodCell, sphereRadius: number): number {
+  return estimateAngularRadius(lodCell) * sphereRadius;
 }
 
 function clampDot(first: Vector3, second: Vector3): number {

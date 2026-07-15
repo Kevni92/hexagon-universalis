@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { GlobeControls } from '@/input/GlobeControls';
 import { createGeodesicTopology } from '@/topology/geodesic';
 import { createTileShowcaseWorld, tileShowcaseCellColors } from '@/data/tileShowcase';
+import { createLodFocusDiagnostics } from '@/topology/lod/diagnostics';
 import { WorldLodController } from '@/topology/lod/WorldLod';
 import { DESKTOP_QUALITY_PROFILE, type QualityProfile } from '@/topology/lod/profiles';
 import { EarthChunkRuntime, type EarthRuntimeStatus } from '@/data/EarthChunkRuntime';
@@ -298,8 +299,17 @@ export class SceneRenderer {
       this.proceduralWorldLod?.update(cameraState) ?? this.worldLod?.update(cameraState) ?? [];
     this.chunkRenderer.update(this.visibleUnits);
     const canvas = this.renderer.domElement;
-    if (this.proceduralWorldLod !== null)
+    if (this.proceduralWorldLod !== null) {
       canvas.dataset.lodLevel = this.activeResolutionLevel ?? 'global';
+      const focusDiagnostics = createLodFocusDiagnostics(cameraState, this.visibleUnits);
+      canvas.dataset.lodFocusDirection = formatVector(focusDiagnostics.focusDirection);
+      canvas.dataset.lodRegionalParents = focusDiagnostics.regionalParentIds.join(',');
+      canvas.dataset.lodLocalParents = focusDiagnostics.localParentIds.join(',');
+      canvas.dataset.lodFinestUnitKeys = focusDiagnostics.finestUnitKeys.join(',');
+      canvas.dataset.lodFinestCellCount = String(focusDiagnostics.finestCellCount);
+      canvas.dataset.lodFinestCentroid = formatVector(focusDiagnostics.finestCentroid);
+      canvas.dataset.lodFocusAngle = focusDiagnostics.finestAngularDistance?.toFixed(6) ?? '';
+    }
     canvas.dataset.cameraDistance = Math.hypot(
       this.camera.position.x,
       this.camera.position.y,
@@ -390,4 +400,11 @@ export class SceneRenderer {
       })
       .catch(() => undefined);
   }
+}
+
+function formatVector(
+  vector: { readonly x: number; readonly y: number; readonly z: number } | null,
+): string {
+  if (vector === null) return '';
+  return [vector.x, vector.y, vector.z].map((value) => value.toFixed(6)).join(',');
 }
