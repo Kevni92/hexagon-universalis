@@ -11,17 +11,15 @@ import { createProceduralWorld, DEFAULT_PROCEDURAL_WORLD_CONFIG } from '@/world/
 describe('prozedurales Terrain-Rendering', () => {
   it('bildet Tiefsee bis Hochgebirge monoton und innerhalb des Reliefbudgets ab', () => {
     const elevations = [-1, -0.62, -0.22, 0, 0.2, 0.45, 0.72, 1];
-    const radii = elevations.map((elevation) => proceduralSurfaceRadius(elevation, 'global'));
+    const globalRadii = elevations.map((elevation) => proceduralSurfaceRadius(elevation, 'global'));
+    const radii = elevations.map((elevation) => proceduralSurfaceRadius(elevation, 'regional'));
 
+    expect(new Set(globalRadii)).toEqual(new Set([1]));
     expect(radii).toEqual([...radii].sort((left, right) => left - right));
     expect(radii[0]).toBeCloseTo(0.982, 6);
     expect(radii.at(-1)).toBeCloseTo(1.065, 6);
-    expect(proceduralSurfaceRadius(0.45, 'regional')).toBeGreaterThan(
-      proceduralSurfaceRadius(0.45, 'global'),
-    );
-    expect(proceduralSurfaceRadius(0.45, 'local')).toBeGreaterThan(
-      proceduralSurfaceRadius(0.45, 'regional'),
-    );
+    expect(proceduralSurfaceRadius(0.45, 'regional')).toBeGreaterThan(1);
+    expect(proceduralSurfaceRadius(0.45, 'local')).toBe(proceduralSurfaceRadius(0.45, 'regional'));
   });
 
   it('überführt normalisierte Höhen in dokumentierte Meterwerte', () => {

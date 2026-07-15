@@ -40,6 +40,8 @@ interface RefinementEntry extends FocusSelectionCandidate {
   readonly sizePx: number;
 }
 
+const LOD_REFERENCE_VIEWPORT_HEIGHT = 720;
+
 /**
  * Orchestriert Multi-Level-Auswahl: hält das immer resident gehaltene
  * Level-0-Patch, entscheidet je Level-0-Zelle per Hysterese, ob sie durch
@@ -327,16 +329,13 @@ export class WorldLodController {
 }
 
 /**
- * Selektive, lückenlose Overlay-Auswahl für die prozedurale Testwelt. Die
- * geschlossene globale Stufe bleibt als Fallback resident. Regional- und
- * Lokalstufe materialisieren ausschließlich Zellen im aktuellen Sichtfeld
- * und liegen mit minimalem radialem Abstand darüber. Dadurch beeinflusst ein
- * Zoom nicht die Rückseite der Welt, während die Basiskugel Übergangsränder
- * ohne schwarze Abdeckungslücken schließt.
+ * Schaltet die prozedurale Testwelt viewportweit zwischen vollständigen
+ * Topologien um. Pro Frame existiert genau eine Zellgröße; eine sichtbare
+ * Grenze zwischen einem feinen Fokus-Chunk und groben Eltern ist unmöglich.
+ * Die Topologien entstehen lazy und bleiben bei Rotation als stabiles Mesh
+ * erhalten.
  */
-export class SelectiveOverlayWorldLodController {
-  private static readonly REGIONAL_FOCUS_RADIANS = Math.PI * 0.3;
-  private static readonly LOCAL_FOCUS_RADIANS = Math.PI * 0.14;
+export class UniformViewportWorldLodController {
   private readonly globalPatch: LodPatch;
   private regionalPatch: LodPatch | null = null;
   private localPatch: LodPatch | null = null;
@@ -352,38 +351,22 @@ export class SelectiveOverlayWorldLodController {
   public update(camera: CameraState): readonly VisibleUnit[] {
     const globalSize = maximumProjectedCellSize(this.globalPatch.cells, camera);
     const regional = this.regionalController.update(0, globalSize) === 'refined';
-    const units: VisibleUnit[] = [this.visibleUnit(0, this.globalPatch.cells)];
-
-    if (regional) {
-      const regionalPatch = this.patchFor(1);
-      const visibleRegional = regionalPatch.cells.filter((cell) =>
-        isFocusedCell(
-          cell.cell.center,
-          camera,
-          SelectiveOverlayWorldLodController.REGIONAL_FOCUS_RADIANS,
-        ),
-      );
-      if (visibleRegional.length > 0) units.push(this.visibleUnit(1, visibleRegional));
-      const regionalSize = maximumProjectedCellSize(regionalPatch.cells, camera);
-      const local = this.localController.update(0, regionalSize) === 'refined';
-      if (local) {
-        const localPatch = this.patchFor(2);
-        const visibleLocal = localPatch.cells.filter((cell) =>
-          isFocusedCell(
-            cell.cell.center,
-            camera,
-            SelectiveOverlayWorldLodController.LOCAL_FOCUS_RADIANS,
-          ),
-        );
-        if (visibleLocal.length > 0) units.push(this.visibleUnit(2, visibleLocal));
-      } else this.localPatch = null;
-    } else {
+    if (!regional) {
       this.localController.reset();
       this.regionalPatch = null;
       this.localPatch = null;
+      return [this.visibleUnit(0, this.globalPatch.cells)];
     }
 
-    return units;
+    const regionalPatch = this.patchFor(1);
+    const regionalSize = maximumProjectedCellSize(regionalPatch.cells, camera);
+    const local = this.localController.update(0, regionalSize) === 'refined';
+    if (!local) {
+      this.localPatch = null;
+      return [this.visibleUnit(1, regionalPatch.cells)];
+    }
+
+    return [this.visibleUnit(2, this.patchFor(2).cells)];
   }
 
   private visibleUnit(depth: 0 | 1 | 2, cells: readonly LodCell[]): VisibleUnit {
@@ -415,19 +398,19 @@ export class SelectiveOverlayWorldLodController {
   }
 }
 
-function isFocusedCell(center: Vector3, camera: CameraState, angularRadius: number): boolean {
-  if (!isCellVisible(center, camera)) return false;
-  const focus = cameraFocusDirection(camera);
-  return clampDot(center, focus) >= Math.cos(angularRadius);
-}
-
 function maximumProjectedCellSize(cells: readonly LodCell[], camera: CameraState): number {
   let maximum = 0;
+  const viewportScale =
+    camera.viewportHeight > 0 ? LOD_REFERENCE_VIEWPORT_HEIGHT / camera.viewportHeight : 1;
   for (const cell of cells) {
     if (!isCellVisible(cell.cell.center, camera)) continue;
     maximum = Math.max(
       maximum,
-      projectedCellSizePx(cell.cell.center, estimateWorldRadius(cell, camera.sphereRadius), camera),
+      projectedCellSizePx(
+        cell.cell.center,
+        estimateWorldRadius(cell, camera.sphereRadius),
+        camera,
+      ) * viewportScale,
     );
   }
   return maximum;

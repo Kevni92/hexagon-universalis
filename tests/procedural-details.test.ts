@@ -58,8 +58,8 @@ describe('prozedurale Detaildarstellung', () => {
     const regionalPlan = createProceduralDetailPlan([regional], lookupFor(regional));
     const localPlan = createProceduralDetailPlan([local], lookupFor(local));
 
-    expect(regionalPlan.length).toBeGreaterThan(0);
-    expect(localPlan.length).toBeGreaterThan(regionalPlan.length);
+    expect(regionalPlan).toHaveLength(0);
+    expect(localPlan.length).toBeGreaterThan(0);
     expect(localPlan.every((detail) => detail.level === 'local')).toBe(true);
   });
 
