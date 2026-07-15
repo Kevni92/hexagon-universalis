@@ -6,10 +6,7 @@ import {
   proceduralTerrainDiagnostics,
   proceduralTileColor,
 } from '@/rendering/ProceduralTerrain';
-import {
-  createProceduralWorld,
-  DEFAULT_PROCEDURAL_WORLD_CONFIG,
-} from '@/world/proceduralWorld';
+import { createProceduralWorld, DEFAULT_PROCEDURAL_WORLD_CONFIG } from '@/world/proceduralWorld';
 
 describe('prozedurales Terrain-Rendering', () => {
   it('bildet Tiefsee bis Hochgebirge monoton und innerhalb des Reliefbudgets ab', () => {
