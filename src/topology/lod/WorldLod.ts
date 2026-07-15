@@ -339,8 +339,10 @@ export class UniformViewportWorldLodController {
   private readonly globalPatch: LodPatch;
   private regionalPatch: LodPatch | null = null;
   private localPatch: LodPatch | null = null;
+  private readonly unitsByDepth = new Map<0 | 1 | 2, VisibleUnit>();
   private readonly regionalController: RefinementController;
   private readonly localController: RefinementController;
+  private topologyBuildCount = 1;
 
   public constructor(private readonly profile: QualityProfile) {
     this.globalPatch = createGlobalPatch(profile.levels.global.frequency);
@@ -353,31 +355,43 @@ export class UniformViewportWorldLodController {
     const regional = this.regionalController.update(0, globalSize) === 'refined';
     if (!regional) {
       this.localController.reset();
-      this.regionalPatch = null;
-      this.localPatch = null;
-      return [this.visibleUnit(0, this.globalPatch.cells)];
+      return [this.unitFor(0)];
     }
 
     const regionalPatch = this.patchFor(1);
     const regionalSize = maximumProjectedCellSize(regionalPatch.cells, camera);
     const local = this.localController.update(0, regionalSize) === 'refined';
     if (!local) {
-      this.localPatch = null;
-      return [this.visibleUnit(1, regionalPatch.cells)];
+      return [this.unitFor(1)];
     }
 
-    return [this.visibleUnit(2, this.patchFor(2).cells)];
+    return [this.unitFor(2)];
   }
 
-  private visibleUnit(depth: 0 | 1 | 2, cells: readonly LodCell[]): VisibleUnit {
+  public get cacheStats(): {
+    readonly cachedTopologies: number;
+    readonly topologyBuilds: number;
+  } {
+    return {
+      cachedTopologies: 1 + Number(this.regionalPatch !== null) + Number(this.localPatch !== null),
+      topologyBuilds: this.topologyBuildCount,
+    };
+  }
+
+  private unitFor(depth: 0 | 1 | 2): VisibleUnit {
+    const cached = this.unitsByDepth.get(depth);
+    if (cached !== undefined) return cached;
+    const cells = this.patchFor(depth).cells;
     const name = (['global', 'regional', 'local'] as const)[depth];
     const prefix = `lvl${depth}-${name}/${depth === 0 ? 'root' : 'visible'}`;
-    return {
+    const unit = {
       key: prefix,
       level: depth,
       cells,
       cellIds: cells.map((cell) => `${prefix}/c${cell.id.index}`),
     };
+    this.unitsByDepth.set(depth, unit);
+    return unit;
   }
 
   public reset(): void {
@@ -385,15 +399,22 @@ export class UniformViewportWorldLodController {
     this.localController.reset();
     this.regionalPatch = null;
     this.localPatch = null;
+    this.unitsByDepth.clear();
   }
 
   private patchFor(depth: 0 | 1 | 2): LodPatch {
     if (depth === 0) return this.globalPatch;
     if (depth === 1) {
-      this.regionalPatch ??= createGlobalPatch(this.profile.levels.regional.frequency);
+      if (this.regionalPatch === null) {
+        this.regionalPatch = createGlobalPatch(this.profile.levels.regional.frequency);
+        this.topologyBuildCount += 1;
+      }
       return this.regionalPatch;
     }
-    this.localPatch ??= createGlobalPatch(this.profile.levels.local.frequency);
+    if (this.localPatch === null) {
+      this.localPatch = createGlobalPatch(this.profile.levels.local.frequency);
+      this.topologyBuildCount += 1;
+    }
     return this.localPatch;
   }
 }

@@ -146,18 +146,34 @@ export class ProceduralDetailRenderer {
 
   private meshes: THREE.InstancedMesh[] = [];
   private signature = '';
+  private worldFingerprint = '';
   private disposed = false;
+  private buildCount = 0;
+  private disposeCount = 0;
 
   public constructor() {
     this.group.name = 'procedural-details';
   }
 
   public get activeInstanceCount(): number {
+    if (!this.group.visible) return 0;
     return this.meshes.reduce((sum, mesh) => sum + mesh.count, 0);
   }
 
   public get activeDrawCallCount(): number {
-    return this.meshes.length;
+    return this.group.visible ? this.meshes.length : 0;
+  }
+
+  public get cacheStats(): {
+    readonly cachedStates: number;
+    readonly detailBuilds: number;
+    readonly detailDisposals: number;
+  } {
+    return {
+      cachedStates: this.meshes.length > 0 ? 1 : 0,
+      detailBuilds: this.buildCount,
+      detailDisposals: this.disposeCount,
+    };
   }
 
   public update(
@@ -166,16 +182,32 @@ export class ProceduralDetailRenderer {
     worldFingerprint: string,
   ): void {
     if (this.disposed) throw new Error('ProceduralDetailRenderer wurde bereits disposed.');
+    const localUnits = units.filter((unit) => unit.level === 2);
+    if (localUnits.length === 0) {
+      if (this.worldFingerprint !== '' && this.worldFingerprint !== worldFingerprint) {
+        this.disposeMeshes();
+        this.signature = '';
+        this.worldFingerprint = '';
+      }
+      this.group.visible = false;
+      return;
+    }
     const nextSignature = `${worldFingerprint}:${units
       .map(
         (unit) =>
           `${unit.key}:${unit.cells.map((_cell, index) => visibleCellId(unit, index)).join(',')}`,
       )
       .join('|')}`;
-    if (nextSignature === this.signature) return;
+    if (nextSignature === this.signature) {
+      this.group.visible = true;
+      return;
+    }
     this.signature = nextSignature;
+    this.worldFingerprint = worldFingerprint;
     this.disposeMeshes();
+    this.group.visible = true;
     if (!('InstancedMesh' in THREE)) return;
+    this.buildCount += 1;
 
     const byType = new Map<DetailType, ProceduralDetailPlacement[]>();
     for (const placement of createProceduralDetailPlan(units, projectedCell)) {
@@ -254,6 +286,7 @@ export class ProceduralDetailRenderer {
       const material = mesh.material;
       if (Array.isArray(material)) material.forEach((item) => item.dispose());
       else material.dispose();
+      this.disposeCount += 1;
     }
     this.meshes = [];
   }

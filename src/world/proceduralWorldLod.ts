@@ -100,6 +100,8 @@ export interface ProceduralLodCell {
 export interface ProceduralLodCacheStats {
   readonly projectedCells: number;
   readonly generation: number;
+  readonly cachedTopologies: number;
+  readonly topologyBuilds: number;
 }
 
 /**
@@ -151,6 +153,8 @@ export class ProceduralWorldLod {
     return {
       projectedCells: this.projectedById.size,
       generation: this.generation,
+      cachedTopologies: this.disposed ? 0 : this.controller.cacheStats.cachedTopologies,
+      topologyBuilds: this.controller.cacheStats.topologyBuilds,
     };
   }
 
@@ -179,7 +183,6 @@ export class ProceduralWorldLod {
         this.colorsById.set(id, this.colorForCell(source));
       }
     }
-    this.pruneProjectionCache(units);
     return units;
   }
 
@@ -220,17 +223,6 @@ export class ProceduralWorldLod {
     this.controller.reset();
     this.projectedById.clear();
     this.colorsById.clear();
-  }
-
-  private pruneProjectionCache(units: readonly VisibleUnit[]): void {
-    const activeIds = new Set(
-      units.flatMap((unit) => unit.cells.map((_cell, index) => visibleCellId(unit, index))),
-    );
-    for (const id of this.projectedById.keys()) {
-      if (activeIds.has(id)) continue;
-      this.projectedById.delete(id);
-      this.colorsById.delete(id);
-    }
   }
 
   private assertActive(): void {

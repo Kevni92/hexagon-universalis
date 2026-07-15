@@ -250,12 +250,14 @@ test('low-density relief restores the same render state after a complete LOD cyc
   expect(initialLocalState.renderDrawCalls).toBeGreaterThan(0);
   expect(initialLocalState.renderDrawCalls).toBeLessThanOrEqual(16);
 
-  await canvas.dispatchEvent('wheel', { deltaY: 3_000 });
-  await expect(canvas).toHaveAttribute('data-lod-level', 'global');
-  await expect(canvas).toHaveAttribute('data-detail-instances', '0');
-  await canvas.dispatchEvent('wheel', { deltaY: -3_000 });
-  await expect(canvas).toHaveAttribute('data-lod-level', 'local');
-  await expect.poll(() => readProceduralRenderState(canvas)).toEqual(initialLocalState);
+  for (let cycle = 0; cycle < 3; cycle += 1) {
+    await canvas.dispatchEvent('wheel', { deltaY: 3_000 });
+    await expect(canvas).toHaveAttribute('data-lod-level', 'global');
+    await expect(canvas).toHaveAttribute('data-detail-instances', '0');
+    await canvas.dispatchEvent('wheel', { deltaY: -3_000 });
+    await expect(canvas).toHaveAttribute('data-lod-level', 'local');
+    await expect.poll(() => readProceduralRenderState(canvas)).toEqual(initialLocalState);
+  }
   expect(pageErrors).toEqual([]);
 });
 

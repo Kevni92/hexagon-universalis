@@ -11,6 +11,18 @@ type LodFocusState = {
   readonly focusAngle: number;
 };
 
+type ProceduralWorkState = {
+  readonly lodUpdates: number;
+  readonly cachedTopologies: number;
+  readonly topologyBuilds: number;
+  readonly cachedChunkMeshes: number;
+  readonly geometryBuilds: number;
+  readonly geometryDisposals: number;
+  readonly cachedDetailStates: number;
+  readonly detailBuilds: number;
+  readonly detailDisposals: number;
+};
+
 async function readFocusState(canvas: Locator): Promise<LodFocusState> {
   return canvas.evaluate((element) => {
     const dataset = (element as HTMLCanvasElement).dataset;
@@ -27,6 +39,23 @@ async function readFocusState(canvas: Locator): Promise<LodFocusState> {
   });
 }
 
+async function readWorkState(canvas: Locator): Promise<ProceduralWorkState> {
+  return canvas.evaluate((element) => {
+    const dataset = (element as HTMLCanvasElement).dataset;
+    return {
+      lodUpdates: Number(dataset.lodUpdates),
+      cachedTopologies: Number(dataset.lodCachedTopologies),
+      topologyBuilds: Number(dataset.lodTopologyBuilds),
+      cachedChunkMeshes: Number(dataset.chunkCachedMeshes),
+      geometryBuilds: Number(dataset.chunkGeometryBuilds),
+      geometryDisposals: Number(dataset.chunkGeometryDisposals),
+      cachedDetailStates: Number(dataset.detailCachedStates),
+      detailBuilds: Number(dataset.detailBuilds),
+      detailDisposals: Number(dataset.detailDisposals),
+    };
+  });
+}
+
 function expectStableFocus(current: LodFocusState, reference: LodFocusState): void {
   expect(current.lodLevel).toBe('local');
   expect(current.focusDirection).toBe(reference.focusDirection);
@@ -37,7 +66,7 @@ function expectStableFocus(current: LodFocusState, reference: LodFocusState): vo
   expect(current.focusAngle).toBeLessThan(0.2);
 }
 
-test('high-density Lokal-LOD behält bei reinem Zoom Volltopologie und Fokus', async ({
+test('high-density Lokal-LOD hält stationäre, Rotations- und Zoombudgets ein', async ({
   page,
 }, testInfo) => {
   test.slow();
@@ -63,8 +92,17 @@ test('high-density Lokal-LOD behält bei reinem Zoom Volltopologie und Fokus', a
   expect(box).not.toBeNull();
   if (box === null) return;
   const reference = await readFocusState(canvas);
+  const warmedWork = await readWorkState(canvas);
   expect(reference.finestCellCount).toBeGreaterThan(0);
   expect(reference.focusAngle).toBeLessThan(0.2);
+  expect(warmedWork.cachedTopologies).toBe(3);
+  expect(warmedWork.topologyBuilds).toBe(3);
+  expect(warmedWork.geometryBuilds).toBe(2);
+  expect(warmedWork.detailBuilds).toBe(1);
+
+  await page.waitForTimeout(250);
+  expect(await readWorkState(canvas)).toEqual(warmedWork);
+
   await testInfo.attach('issue-88-high-local-zoom-start', {
     body: await page.screenshot({ clip: box }),
     contentType: 'image/png',
@@ -77,6 +115,16 @@ test('high-density Lokal-LOD behält bei reinem Zoom Volltopologie und Fokus', a
   await canvas.dispatchEvent('wheel', { deltaY: -20 });
   await expect(canvas).toHaveAttribute('data-camera-distance', '1.20', { timeout: 45_000 });
   expectStableFocus(await readFocusState(canvas), reference);
+
+  const beforeRotation = await readWorkState(canvas);
+  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.62, box.y + box.height * 0.44, { steps: 8 });
+  await page.mouse.up();
+  await canvas.evaluate(
+    () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+  );
+  expect(await readWorkState(canvas)).toEqual(beforeRotation);
 
   await testInfo.attach('issue-88-high-local-zoom-end', {
     body: await page.screenshot({ clip: box }),

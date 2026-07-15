@@ -159,7 +159,7 @@ describe('ProceduralWorldLod', () => {
     const firstFingerprint = world.fingerprint;
 
     world.reconfigure({ seed: 'after' });
-    expect(world.cacheStats).toEqual({ projectedCells: 0, generation: 2 });
+    expect(world.cacheStats).toMatchObject({ projectedCells: 0, generation: 2 });
     expect(world.fingerprint).not.toBe(firstFingerprint);
     const sameDensityIds = world
       .update(camera(10))
@@ -167,7 +167,7 @@ describe('ProceduralWorldLod', () => {
     expect(sameDensityIds).toEqual(firstIds);
 
     world.reconfigure({ density: 'standard' });
-    expect(world.cacheStats).toEqual({ projectedCells: 0, generation: 3 });
+    expect(world.cacheStats).toMatchObject({ projectedCells: 0, generation: 3 });
     expect(world.profile.levelCellCounts.global).toBe(642);
   });
 
@@ -184,23 +184,20 @@ describe('ProceduralWorldLod', () => {
     expect(world.cacheStats.generation).toBe(1);
   });
 
-  it('pruned Projektionen beim Schwenken und leert alle Ressourcen beim Dispose', () => {
+  it('hält höchstens drei Volltopologien samt Projektionen und leert sie beim Dispose', () => {
     const world = new ProceduralWorldLod({ density: 'standard' });
-    for (const position of [
-      { x: 0, y: 0, z: 2.2 },
-      { x: 2.2, y: 0, z: 0 },
-      { x: 0, y: 2.2, z: 0 },
-    ]) {
-      world.update({
-        ...camera(2.2),
-        position,
-        forward: { x: -position.x, y: -position.y, z: -position.z },
-      });
-      expect(world.cacheStats.projectedCells).toBeLessThanOrEqual(world.profile.maxActiveCells);
-    }
+    for (let cycle = 0; cycle < 4; cycle += 1)
+      for (const distance of [3.4, 2.8, 1.2]) world.update(camera(distance));
+
+    expect(world.cacheStats.cachedTopologies).toBe(3);
+    expect(world.cacheStats.topologyBuilds).toBe(3);
+    expect(world.cacheStats.projectedCells).toBe(
+      Object.values(world.profile.levelCellCounts).reduce((sum, count) => sum + count, 0),
+    );
 
     world.dispose();
     expect(world.cacheStats.projectedCells).toBe(0);
+    expect(world.cacheStats.cachedTopologies).toBe(0);
     expect(world.cellColors.size).toBe(0);
     expect(() => world.update(camera(10))).toThrow(/disposed/);
   });

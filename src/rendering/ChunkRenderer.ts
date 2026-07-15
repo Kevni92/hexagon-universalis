@@ -28,16 +28,24 @@ export class ChunkRenderer {
     string,
     THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>
   >();
+  private readonly cachedMeshesByKey = new Map<
+    string,
+    THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>
+  >();
+  private readonly signaturesByUnit = new WeakMap<VisibleUnit, string>();
   private readonly substrateMesh: THREE.Mesh<
     THREE.BufferGeometry,
     THREE.MeshStandardMaterial
   > | null;
   private disposed = false;
+  private geometryBuildCount = 0;
+  private geometryDisposeCount = 0;
 
   public constructor(
     private readonly radius = 1,
     private cellColors?: ReadonlyMap<string, string>,
     private readonly surfaceRadius?: ChunkSurfaceRadius,
+    private readonly maxCachedMeshes = 0,
   ) {
     this.group.name = 'chunk-renderer';
     this.substrateMesh = surfaceRadius === undefined ? null : this.createSubstrateMesh();
@@ -84,6 +92,18 @@ export class ChunkRenderer {
     return [...this.meshesByKey.values()];
   }
 
+  public get cacheStats(): {
+    readonly cachedMeshes: number;
+    readonly geometryBuilds: number;
+    readonly geometryDisposals: number;
+  } {
+    return {
+      cachedMeshes: this.cachedMeshesByKey.size,
+      geometryBuilds: this.geometryBuildCount,
+      geometryDisposals: this.geometryDisposeCount,
+    };
+  }
+
   /**
    * Differenzielles Update: baut Meshes für neue Units, entfernt Meshes für
    * nicht mehr enthaltene Units, lässt bestehende Units unverändert (stabile
@@ -95,19 +115,31 @@ export class ChunkRenderer {
 
     for (const [key, mesh] of this.meshesByKey) {
       if (nextKeys.has(key)) continue;
-      this.disposeMesh(mesh);
       this.meshesByKey.delete(key);
+      this.deactivateMesh(key, mesh);
     }
 
     for (const unit of units) {
       const existing = this.meshesByKey.get(unit.key);
-      const signature = unitSignature(unit);
+      const signature = this.unitSignature(unit);
       if (existing?.userData.unitSignature === signature) continue;
       if (existing !== undefined) {
         this.disposeMesh(existing);
         this.meshesByKey.delete(unit.key);
       }
-      const mesh = this.buildMesh(unit);
+      const cached = this.cachedMeshesByKey.get(unit.key);
+      if (cached?.userData.unitSignature === signature) {
+        this.cachedMeshesByKey.delete(unit.key);
+        cached.visible = true;
+        this.meshesByKey.set(unit.key, cached);
+        this.group.add(cached);
+        continue;
+      }
+      if (cached !== undefined) {
+        this.cachedMeshesByKey.delete(unit.key);
+        this.disposeMesh(cached);
+      }
+      const mesh = this.buildMesh(unit, signature);
       this.meshesByKey.set(unit.key, mesh);
       this.group.add(mesh);
     }
@@ -118,7 +150,9 @@ export class ChunkRenderer {
     if (this.disposed) return;
     this.cellColors = colors;
     for (const mesh of this.meshesByKey.values()) this.disposeMesh(mesh);
+    for (const mesh of this.cachedMeshesByKey.values()) this.disposeMesh(mesh);
     this.meshesByKey.clear();
+    this.cachedMeshesByKey.clear();
     this.update(units);
   }
 
@@ -126,13 +160,16 @@ export class ChunkRenderer {
     if (this.disposed) return;
     this.disposed = true;
     for (const mesh of this.meshesByKey.values()) this.disposeMesh(mesh);
+    for (const mesh of this.cachedMeshesByKey.values()) this.disposeMesh(mesh);
     this.meshesByKey.clear();
+    this.cachedMeshesByKey.clear();
     if (this.substrateMesh !== null) this.disposeMesh(this.substrateMesh);
     this.group.clear();
   }
 
   private buildMesh(
     unit: VisibleUnit,
+    signature: string,
   ): THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial> {
     const topology = unitToTopology(unit);
     const surfaceRadius = this.surfaceRadius;
@@ -178,7 +215,8 @@ export class ChunkRenderer {
     mesh.userData.topTriangleCount = data.topTriangleCount;
     mesh.userData.sideTriangleCount = data.sideTriangleCount;
     mesh.userData.level = unit.level;
-    mesh.userData.unitSignature = unitSignature(unit);
+    mesh.userData.unitSignature = signature;
+    this.geometryBuildCount += 1;
     return mesh;
   }
 
@@ -214,11 +252,36 @@ export class ChunkRenderer {
     this.group.remove(mesh);
     mesh.geometry.dispose();
     mesh.material.dispose();
+    this.geometryDisposeCount += 1;
   }
-}
 
-function unitSignature(unit: VisibleUnit): string {
-  return unit.cells.map((_cell, index) => visibleCellId(unit, index)).join('|');
+  private deactivateMesh(
+    key: string,
+    mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>,
+  ): void {
+    this.group.remove(mesh);
+    if (this.maxCachedMeshes <= 0) {
+      this.disposeMesh(mesh);
+      return;
+    }
+    mesh.visible = false;
+    this.cachedMeshesByKey.set(key, mesh);
+    while (this.cachedMeshesByKey.size > this.maxCachedMeshes) {
+      const oldest = this.cachedMeshesByKey.entries().next().value as
+        [string, THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>] | undefined;
+      if (oldest === undefined) break;
+      this.cachedMeshesByKey.delete(oldest[0]);
+      this.disposeMesh(oldest[1]);
+    }
+  }
+
+  private unitSignature(unit: VisibleUnit): string {
+    const cached = this.signaturesByUnit.get(unit);
+    if (cached !== undefined) return cached;
+    const signature = unit.cells.map((_cell, index) => visibleCellId(unit, index)).join('|');
+    this.signaturesByUnit.set(unit, signature);
+    return signature;
+  }
 }
 
 function unitToTopology(unit: VisibleUnit): GeodesicTopology {
