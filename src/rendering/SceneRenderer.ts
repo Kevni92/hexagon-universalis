@@ -25,6 +25,8 @@ import {
 const MAX_PIXEL_RATIO = 2;
 const LOD_AZIMUTH_STEP_RADIANS = THREE.MathUtils.degToRad(20);
 const LOD_ELEVATION_STEP_RADIANS = THREE.MathUtils.degToRad(30);
+export const MAX_RENDER_FPS = 60;
+const FRAME_INTERVAL_MS = 1000 / MAX_RENDER_FPS;
 const CAMERA = { fov: 45, near: 0.1, far: 100, z: 3.4 } as const;
 const SHOWCASE_TOPOLOGY_FREQUENCY = 2;
 const PROCEDURAL_LEVELS = ['global', 'regional', 'local'] as const;
@@ -80,6 +82,7 @@ export class SceneRenderer {
   public readonly ready: Promise<void>;
   private animationFrameId: number | null = null;
   private lastFrameTime = 0;
+  private frameAccumulatorMs = 0;
   private disposed = false;
   private proceduralRequestId = 0;
   private lastProceduralStateKey = '';
@@ -273,6 +276,7 @@ export class SceneRenderer {
     if (this.disposed || this.animationFrameId !== null) return;
 
     this.lastFrameTime = performance.now();
+    this.frameAccumulatorMs = 0;
     this.animationFrameId = requestAnimationFrame(this.renderFrame);
   }
 
@@ -321,8 +325,15 @@ export class SceneRenderer {
 
   private readonly renderFrame = (time: number): void => {
     if (this.disposed) return;
-    const deltaSeconds = Math.min((time - this.lastFrameTime) / 1000, 0.1);
+    const elapsedMs = Math.min(Math.max(time - this.lastFrameTime, 0), 1000);
     this.lastFrameTime = time;
+    this.frameAccumulatorMs += elapsedMs;
+    if (this.frameAccumulatorMs < FRAME_INTERVAL_MS) {
+      this.animationFrameId = requestAnimationFrame(this.renderFrame);
+      return;
+    }
+    const deltaSeconds = Math.min(this.frameAccumulatorMs / 1000, 0.1);
+    this.frameAccumulatorMs %= FRAME_INTERVAL_MS;
     this.controls.update(deltaSeconds);
     if ((this.worldLod !== null || this.proceduralWorldLod !== null) && this.chunkRenderer !== null)
       this.updateLod();

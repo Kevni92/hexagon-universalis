@@ -279,6 +279,30 @@ describe('SceneRenderer', () => {
     expect(testState.rendererDisposed).toBe(true);
   });
 
+  it('limits the render loop to 60 FPS', async () => {
+    const { SceneRenderer } = await import('@/rendering/SceneRenderer');
+    const container = {
+      clientWidth: 800,
+      clientHeight: 600,
+      append: vi.fn(),
+    } as unknown as HTMLElement;
+    const renderer = new SceneRenderer(container, 'demo');
+    const render = vi.spyOn(
+      (renderer as unknown as { renderer: { render: () => void } }).renderer,
+      'render',
+    );
+    renderer.start();
+
+    for (const time of [110, 116, 117, 125, 133, 134]) {
+      const callback = testState.frameCallbacks.shift();
+      if (callback === undefined) throw new Error('missing animation frame');
+      callback(time);
+    }
+
+    expect(render).toHaveBeenCalledTimes(2);
+    renderer.dispose();
+  });
+
   it('does not create invalid dimensions for a hidden container', async () => {
     const { SceneRenderer } = await import('@/rendering/SceneRenderer');
     const container = {
