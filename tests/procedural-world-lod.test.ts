@@ -62,7 +62,7 @@ describe('ProceduralWorldLod', () => {
     const regionalOnly = world.update(camera(2.2));
     expect(new Set(regionalOnly.map((unit) => unit.level))).toEqual(new Set([0, 1]));
 
-    const local = world.update(camera(1.35));
+    const local = world.update(camera(1.18));
     expect(new Set(local.map((unit) => unit.level))).toEqual(new Set([0, 1, 2]));
     expect(cellsAtLevel(local, 2).length).toBeGreaterThan(0);
     expect(cellsAtLevel(local, 2).length).toBeLessThan(10242);
@@ -77,7 +77,7 @@ describe('ProceduralWorldLod', () => {
       seed: 'exclusive-lod',
       density: 'standard',
     });
-    const units = world.update(camera(1.35));
+    const units = world.update(camera(1.18));
     const globalIndices = new Set(cellsAtLevel(units, 0).map((cell) => cell.id.index));
 
     for (const regionalCell of cellsAtLevel(units, 1)) {
@@ -142,7 +142,7 @@ describe('ProceduralWorldLod', () => {
 
   it('verwendet voll qualifizierte lokale IDs ohne doppelt sichtbare Picking-Flächen', () => {
     const world = new ProceduralWorldLod({ density: 'standard' });
-    const units = world.update(camera(1.35));
+    const units = world.update(camera(1.18));
     const ids = units.flatMap((unit) =>
       unit.cells.map((_cell, index) => visibleCellId(unit, index)),
     );
