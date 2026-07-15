@@ -4,7 +4,11 @@ import type { GeodesicCell, GeodesicTopology, Vector3 } from '@/topology/geodesi
 import { visibleCellId, type VisibleUnit } from '@/topology/lod/WorldLod';
 import { createCellGlobeGeometryData } from './CellGlobe';
 
-export type ChunkSurfaceRadius = (position: Vector3, level: 0 | 1 | 2) => number;
+export type ChunkSurfaceRadius = (
+  position: Vector3,
+  level: 0 | 1 | 2,
+  cellId: string,
+) => number;
 
 /**
  * Rendert eine stabile Liste sichtbarer Zell-Chunks (`VisibleUnit[]`) als
@@ -109,14 +113,15 @@ export class ChunkRenderer {
     unit: VisibleUnit,
   ): THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial> {
     const topology = unitToTopology(unit);
+    const surfaceRadius = this.surfaceRadius;
     const data = createCellGlobeGeometryData(
       topology,
       this.radius + unit.level * 0.003,
       this.cellColors,
       unit.level === 2 ? 'tangent-plane' : 'spherical',
-      this.surfaceRadius === undefined
+      surfaceRadius === undefined
         ? undefined
-        : (position) => this.surfaceRadius!(position, unit.level),
+        : (position, cellId) => surfaceRadius(position, unit.level, cellId),
     );
 
     const geometry = new THREE.BufferGeometry();
