@@ -81,9 +81,9 @@ describe('prozedurale Detaildarstellung', () => {
   it('erzeugt keine Details auf Wasser, Gletschern oder ausgeschlossenen Hochgebirgsflächen', () => {
     const local = unit(2);
 
-    expect(createProceduralDetailPlan([local], lookupFor(local, 'ocean', [], 'water'))).toHaveLength(
-      0,
-    );
+    expect(
+      createProceduralDetailPlan([local], lookupFor(local, 'ocean', [], 'water')),
+    ).toHaveLength(0);
     expect(
       createProceduralDetailPlan([local], lookupFor(local, 'tundra', ['glacier'])),
     ).toHaveLength(0);
