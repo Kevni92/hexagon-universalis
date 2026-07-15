@@ -43,7 +43,16 @@ jobs:
         run: npm run typecheck
 
       - name: Test
-        run: npm run test:run
+        run: |
+          set -o pipefail
+          npm run test:run 2>&1 | tee vitest-issue-88.log
+
+      - name: Upload Vitest diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitest-issue-88-log
+          path: vitest-issue-88.log
 
       - name: Build
         run: npm run build
