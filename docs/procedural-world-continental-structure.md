@@ -31,4 +31,3 @@ Die Struktur ist bewusst keine physikalische Plattentektonik. Gebirge,
 Hydrologie, Seen und Klimaklassifikation verwenden die Makrofelder in ihren
 Folge-Issues, ändern aber nicht deren fachliche Quelle. Datumsgrenze und Pole
 bleiben normale Punkte der Kugel; es gibt keine Sonderfall- oder Nahtlogik.
-
