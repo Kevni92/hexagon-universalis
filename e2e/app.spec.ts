@@ -201,10 +201,10 @@ test('low-density procedural LOD stays within detail and draw-call budgets', asy
   await page.goto('/?world=procedural&density=low');
   const canvas = page.locator('canvas.viewport-canvas');
 
-  await canvas.dispatchEvent('wheel', { deltaY: -400 });
-  await expect(canvas).toHaveAttribute('data-lod-level', 'regional');
-  await canvas.dispatchEvent('wheel', { deltaY: -400 });
-  await expect(canvas).toHaveAttribute('data-lod-level', 'local');
+  await zoomUntilLod(canvas, 'regional', -400);
+  await zoomUntilLod(canvas, 'local', -400);
+  await expect(canvas).toHaveAttribute('data-projection-mode', 'flat');
+  await expect(canvas).toHaveAttribute('data-projection-center', /.+/);
   await expect(canvas).toHaveAttribute('data-detail-instances', /^\d+$/);
   await expect
     .poll(async () => Number(await canvas.getAttribute('data-detail-draw-calls')))

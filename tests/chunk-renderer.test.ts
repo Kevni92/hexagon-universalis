@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ChunkRenderer } from '@/rendering/ChunkRenderer';
 import { createGlobalPatch } from '@/topology/lod/hierarchy';
+import { createFlatSurfaceProjection, createLocalTangentFrame } from '@/topology/lod/projection';
 import type { VisibleUnit } from '@/topology/lod/WorldLod';
 
 function unitsFromPatchCells(count: number): VisibleUnit[] {
@@ -107,6 +108,38 @@ describe('ChunkRenderer', () => {
     expect(mesh.userData.triangleCount).toBe(cell.cell.boundary.length * 3);
     expect(new Set(mesh.userData.cellIds as readonly string[])).toEqual(new Set([cellId]));
     expect(renderer.activeChunkCount).toBe(2);
+  });
+
+  it('reprojects a local chunk into east/north coordinates and hides the globe substrate', () => {
+    const cell = createGlobalPatch(4).cells[0];
+    if (cell === undefined) throw new Error('missing local cell');
+    const renderer = new ChunkRenderer(1, undefined, () => 1);
+    const projection = createFlatSurfaceProjection(createLocalTangentFrame(cell.cell.center));
+
+    renderer.update([{ key: 'flat', level: 2, cells: [cell] }], projection);
+
+    const mesh = renderer.meshes[0];
+    if (mesh === undefined) throw new Error('missing flat mesh');
+    const positions = mesh.geometry.getAttribute('position');
+    expect(renderer.activeSubstrateDrawCallCount).toBe(0);
+    expect(
+      renderer.group.children.find((child) => child.name === 'procedural-planet-substrate'),
+    ).toMatchObject({
+      visible: false,
+    });
+    expect(
+      Array.from({ length: positions.count }, (_, index) => positions.getZ(index)).some(
+        (value) => Math.abs(value) < 1e-6,
+      ),
+    ).toBe(true);
+
+    renderer.update([{ key: 'flat', level: 2, cells: [cell] }], undefined);
+    expect(renderer.meshes[0]).not.toBe(mesh);
+    expect(
+      renderer.group.children.find((child) => child.name === 'procedural-planet-substrate'),
+    ).toMatchObject({
+      visible: true,
+    });
   });
 
   it('covers podium seams with a non-pickable substrate below the shared base radius', () => {
