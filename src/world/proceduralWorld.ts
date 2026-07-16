@@ -9,9 +9,14 @@ import { createSeededNoise3D, hashText } from './seededNoise';
 import { ContinentalStructure, type ContinentalStructureDiagnostics } from './continentalStructure';
 import { MountainStructure, type MountainStructureDiagnostics } from './mountainStructure';
 import { deriveHydrology, type ProceduralLake, type ProceduralWaterFeature } from './hydrology';
+import {
+  deriveProceduralClimate,
+  PROCEDURAL_CLIMATE_THRESHOLDS,
+  type ProceduralClimateDiagnostics,
+} from './proceduralClimate';
 
 export const PROCEDURAL_WORLD_FORMAT_VERSION = 1 as const;
-export const PROCEDURAL_WORLD_GENERATOR_VERSION = '1.1.0';
+export const PROCEDURAL_WORLD_GENERATOR_VERSION = '1.2.0';
 
 export type ProceduralDensityProfileId = 'low' | 'standard' | 'high' | 'ultra';
 
@@ -75,6 +80,9 @@ export interface ProceduralWorldCell {
   readonly isInlandBasin: boolean;
   readonly mountainRangeId: string | null;
   readonly mountainInfluence: number;
+  readonly coastDistance: number;
+  readonly waterProximity: number;
+  readonly rainShadow: number;
   readonly flowToCellId: string | null;
   readonly catchmentId: string | null;
   readonly flowAccumulation: number;
@@ -93,6 +101,7 @@ export interface ProceduralWorld {
   readonly fingerprint: string;
   readonly macroStructure: ContinentalStructureDiagnostics;
   readonly mountainStructure: MountainStructureDiagnostics;
+  readonly climate: ProceduralClimateDiagnostics;
   readonly lakes: readonly ProceduralLake[];
   readonly cells: readonly ProceduralWorldCell[];
 }
@@ -235,6 +244,52 @@ function buildProceduralWorld(
       isLakeOutlet: false,
     }),
   }));
+  const classifiedById = new Map(classified.map((cell) => [cell.cellId, cell]));
+  const climate = deriveProceduralClimate(
+    normalized.seed,
+    hydrologicCells.map((cell) => {
+      const raw = classifiedById.get(cell.cellId);
+      if (raw === undefined) throw new RangeError(`Unbekannte Klimazelle: ${cell.cellId}.`);
+      return {
+        cellId: cell.cellId,
+        center: cell.center,
+        neighborIds: cell.neighborIds,
+        elevation: cell.elevation,
+        surface: cell.surface,
+        macroRegion: cell.macroRegion,
+        isInlandBasin: cell.isInlandBasin,
+        mountainRangeId: cell.mountainRangeId,
+        mountainInfluence: cell.mountainInfluence,
+        rawTemperature: raw.rawTemperature,
+        rawMoisture: raw.rawMoisture,
+        flowAccumulation: cell.flowAccumulation,
+        waterFeature: cell.waterFeature,
+        isLakeOutlet: cell.isLakeOutlet,
+      };
+    }),
+    mountainStructure.diagnostics.ranges,
+  );
+  const climateCells = stabilizeBiomeSpeckles(
+    hydrologicCells.map((cell) => {
+      const fields = climate.cells.get(cell.cellId);
+      if (fields === undefined) throw new RangeError(`Unbekannte Klimazelle: ${cell.cellId}.`);
+      const visual = classifyVisualTile(
+        cell.surface,
+        cell.isCoast,
+        cell.elevation,
+        fields.temperature,
+        fields.moisture,
+        cell.isShelf,
+        cell.waterFeature,
+      );
+      return { ...cell, ...fields, tileType: visual.tileType, modifiers: visual.modifiers };
+    }),
+  );
+  const biomeCounts = climateCells.reduce<Record<string, number>>((counts, cell) => {
+    counts[cell.tileType] = (counts[cell.tileType] ?? 0) + 1;
+    return counts;
+  }, {});
+  const climateDiagnostics = { ...climate.diagnostics, biomeCounts };
   const worldWithoutFingerprint = {
     formatVersion: PROCEDURAL_WORLD_FORMAT_VERSION,
     generatorVersion: PROCEDURAL_WORLD_GENERATOR_VERSION,
@@ -243,8 +298,9 @@ function buildProceduralWorld(
     cellCount: hydrologicCells.length,
     macroStructure: macroStructure.diagnostics,
     mountainStructure: mountainStructure.diagnostics,
+    climate: climateDiagnostics,
     lakes: hydrology.lakes,
-    cells: hydrologicCells,
+    cells: climateCells,
   };
   return {
     ...worldWithoutFingerprint,
@@ -434,6 +490,9 @@ function classifyCell(
     isInlandBasin: cell.isInlandBasin,
     mountainRangeId: cell.surface === 'land' ? cell.mountainRangeId : null,
     mountainInfluence: cell.surface === 'land' ? round(cell.mountainInfluence) : 0,
+    coastDistance: isCoast ? 0 : 1,
+    waterProximity: isCoast ? 1 : 0,
+    rainShadow: 0,
   };
 }
 
@@ -444,10 +503,12 @@ function classifyVisualTile(
   temperature: number,
   moisture: number,
   isShelf: boolean,
+  waterFeature: ProceduralWaterFeature = 'land',
 ): {
   readonly tileType: TileType;
   readonly modifiers: readonly TileModifier[];
 } {
+  if (waterFeature === 'lake') return { tileType: 'wetland', modifiers: ['wet'] };
   if (surface === 'water') {
     if (isShelf && !isCoast) return { tileType: 'shelfWater', modifiers: [] };
     if (temperature < 0.13 && elevation > -0.32) return { tileType: 'iceWater', modifiers: [] };
@@ -476,32 +537,35 @@ function classifyVisualTile(
       tileType: temperature > 0.42 && moisture < 0.7 ? 'sandCoast' : 'rockyCoast',
       modifiers: uniqueModifiers(modifiers),
     };
-  if (moisture > 0.68 && elevation < 0.24) {
+  if (moisture > PROCEDURAL_CLIMATE_THRESHOLDS.wetlandMoisture && elevation < 0.24) {
     modifiers.push('wet');
     return {
       tileType: temperature > 0.76 ? 'mangrove' : 'wetland',
       modifiers: uniqueModifiers(modifiers),
     };
   }
-  if (temperature > 0.72 && moisture > 0.64)
+  if (
+    temperature > PROCEDURAL_CLIMATE_THRESHOLDS.rainforestTemperature &&
+    moisture > PROCEDURAL_CLIMATE_THRESHOLDS.rainforestMoisture
+  )
     return {
       tileType: 'tropicalRainforest',
       modifiers: uniqueModifiers(modifiers),
     };
-  if (temperature > 0.68 && moisture > 0.45)
+  if (temperature > 0.68 && moisture > 0.42)
     return {
       tileType: 'tropicalDryForest',
       modifiers: uniqueModifiers(modifiers),
     };
   if (temperature > 0.67 && moisture > 0.3)
     return { tileType: 'savanna', modifiers: uniqueModifiers(modifiers) };
-  if (temperature > 0.52 && moisture < 0.28)
+  if (temperature > 0.52 && moisture < PROCEDURAL_CLIMATE_THRESHOLDS.desertMoisture)
     return { tileType: 'desert', modifiers: uniqueModifiers(modifiers) };
-  if (temperature > 0.44 && moisture < 0.38)
+  if (temperature > 0.44 && moisture < PROCEDURAL_CLIMATE_THRESHOLDS.semiDesertMoisture)
     return { tileType: 'semiDesert', modifiers: uniqueModifiers(modifiers) };
-  if (temperature < 0.46 && moisture > 0.58)
+  if (temperature < 0.46 && moisture > PROCEDURAL_CLIMATE_THRESHOLDS.borealMoisture)
     return { tileType: 'borealForest', modifiers: uniqueModifiers(modifiers) };
-  if (moisture > 0.56)
+  if (moisture > PROCEDURAL_CLIMATE_THRESHOLDS.forestMoisture)
     return {
       tileType: 'temperateMixedForest',
       modifiers: uniqueModifiers(modifiers),
@@ -511,6 +575,61 @@ function classifyVisualTile(
     tileType: 'temperateGrassland',
     modifiers: uniqueModifiers(modifiers),
   };
+}
+
+function stabilizeBiomeSpeckles(cells: readonly ProceduralWorldCell[]): ProceduralWorldCell[] {
+  const cellsById = new Map(cells.map((cell) => [cell.cellId, cell]));
+  return cells.map((cell) => {
+    if (
+      cell.surface !== 'land' ||
+      cell.waterFeature === 'lake' ||
+      cell.isCoast ||
+      cell.relief === 'highMountains' ||
+      ['tundra', 'tundraWoodland', 'wetland', 'mangrove'].includes(cell.tileType)
+    )
+      return cell;
+    const neighbors = cell.neighborIds
+      .map((neighborId) => cellsById.get(neighborId))
+      .filter(
+        (neighbor): neighbor is ProceduralWorldCell =>
+          neighbor !== undefined && neighbor.surface === 'land' && neighbor.waterFeature === 'land',
+      );
+    const counts = new Map<TileType, number>();
+    for (const neighbor of neighbors) {
+      counts.set(neighbor.tileType, (counts.get(neighbor.tileType) ?? 0) + 1);
+    }
+    const dominant = [...counts.entries()].sort(
+      (first, second) => second[1] - first[1] || first[0].localeCompare(second[0]),
+    )[0];
+    if (
+      dominant === undefined ||
+      dominant[1] < 2 ||
+      dominant[0] === cell.tileType ||
+      biomeFamily(dominant[0]) !== biomeFamily(cell.tileType)
+    )
+      return cell;
+    const modifiers = reliefModifiers(cell.elevation);
+    if (dominant[0] === 'wetland') modifiers.push('wet');
+    return { ...cell, tileType: dominant[0], modifiers: uniqueModifiers(modifiers) };
+  });
+}
+
+function biomeFamily(tileType: TileType): 'forest' | 'dry' | 'open' | 'other' {
+  if (
+    [
+      'temperateMixedForest',
+      'borealForest',
+      'tundraWoodland',
+      'mediterraneanWoodland',
+      'tropicalRainforest',
+      'tropicalDryForest',
+      'subtropicalForest',
+    ].includes(tileType)
+  )
+    return 'forest';
+  if (['desert', 'semiDesert', 'steppe'].includes(tileType)) return 'dry';
+  if (['temperateGrassland', 'savanna'].includes(tileType)) return 'open';
+  return 'other';
 }
 
 function reliefModifiers(elevation: number): TileModifier[] {
