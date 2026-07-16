@@ -37,6 +37,8 @@ export interface WorldLodProjectionUpdate {
   readonly projectedCellSizePx: number;
   readonly focus: Vector3;
   readonly radius?: number;
+  /** Hält die Flat-Nahansicht außerhalb des spielbaren Fokusbereichs geschlossen. */
+  readonly flatAllowed?: boolean;
 }
 
 export interface WorldLodProjectionConfig {
@@ -189,8 +191,25 @@ export class WorldLodProjectionController {
       throw new RangeError('Projizierte Zellgröße muss endlich oder Infinity sein.');
     const focus = normalize(input.focus, 'Projektionsfokus');
     const flatLevel = input.levelName === 'local' || input.levelName === 'detail';
-    const wantsFlat = flatLevel && input.projectedCellSizePx >= this.config.enterCellSizePx;
-    const canStayFlat = flatLevel && input.projectedCellSizePx >= this.config.exitCellSizePx;
+    const flatAllowed = input.flatAllowed ?? true;
+    const wantsFlat =
+      flatLevel && input.projectedCellSizePx >= this.config.enterCellSizePx && flatAllowed;
+    const canStayFlat =
+      flatLevel && input.projectedCellSizePx >= this.config.exitCellSizePx && flatAllowed;
+
+    if (
+      flatLevel &&
+      !flatAllowed &&
+      (this.state.mode === 'flat' || input.projectedCellSizePx >= this.config.exitCellSizePx)
+    ) {
+      if (this.state.mode !== 'globe' || this.state.levelName !== input.levelName) {
+        return this.commit('globe', input.levelName, null, 'latitude-limit');
+      }
+      if (this.state.reason !== 'latitude-limit') {
+        return this.commit('globe', input.levelName, null, 'latitude-limit');
+      }
+      return this.state;
+    }
 
     if (this.state.mode === 'globe' && wantsFlat) {
       return this.commit(

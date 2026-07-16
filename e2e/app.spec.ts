@@ -205,6 +205,9 @@ test('low-density procedural LOD stays within detail and draw-call budgets', asy
   await zoomUntilLod(canvas, 'local', -400);
   await expect(canvas).toHaveAttribute('data-projection-mode', 'flat');
   await expect(canvas).toHaveAttribute('data-projection-center', /.+/);
+  await expect(canvas).toHaveAttribute('data-playable-latitude', '0.000');
+  await expect(canvas).toHaveAttribute('data-playable-latitude-limit', '78.0');
+  await expect(canvas).toHaveAttribute('data-playable-latitude-status', 'allowed');
   await expect(canvas).toHaveAttribute('data-detail-instances', /^\d+$/);
   await expect
     .poll(async () => Number(await canvas.getAttribute('data-detail-draw-calls')))

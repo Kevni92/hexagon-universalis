@@ -72,6 +72,17 @@ describe('hybride Globe-/Flat-Projektion', () => {
     ).toBe('globe');
   });
 
+  it('keeps flat disabled at the playable latitude boundary', () => {
+    const controller = new WorldLodProjectionController();
+    const focus = { x: 0, y: 0, z: 1 };
+    expect(
+      controller.update({ levelName: 'local', projectedCellSizePx: 64, focus, flatAllowed: false }),
+    ).toMatchObject({ mode: 'globe', reason: 'latitude-limit' });
+    expect(
+      controller.update({ levelName: 'local', projectedCellSizePx: 64, focus, flatAllowed: true }),
+    ).toMatchObject({ mode: 'flat', reason: 'level-change' });
+  });
+
   it('provides a stable render projection signature and local up normal', () => {
     const projection = createFlatSurfaceProjection(createLocalTangentFrame({ x: 0, y: 0, z: 1 }));
     expect(projection.signature).toBe(
