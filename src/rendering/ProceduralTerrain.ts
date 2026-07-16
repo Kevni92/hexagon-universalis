@@ -1,4 +1,5 @@
 import { TILE_PROFILES, type TileType } from '@/data/tileCatalog';
+import type { WorldLodLevelName } from '@/topology/lod/sevenLevelArchitecture';
 import type { ProceduralWorldCell } from '@/world/proceduralWorld';
 import type { ProceduralWorldLodLevel } from '@/world/proceduralWorldLod';
 
@@ -12,6 +13,24 @@ export const PROCEDURAL_RELIEF_PROFILE: ReliefProfile = {
   maxLandLift: 0.065,
   maxOceanDrop: 0.018,
 };
+
+export type ProceduralReliefLevel = ProceduralWorldLodLevel | WorldLodLevelName;
+
+export interface ProceduralReliefScale {
+  readonly land: number;
+  readonly water: number;
+}
+
+export const PROCEDURAL_RELIEF_SCALES: Readonly<Record<WorldLodLevelName, ProceduralReliefScale>> =
+  {
+    global: { land: 0, water: 0 },
+    continental: { land: 0.08, water: 0.04 },
+    macroregional: { land: 0.18, water: 0.1 },
+    regional: { land: 0.32, water: 0.2 },
+    subregional: { land: 0.5, water: 0.38 },
+    local: { land: 0.72, water: 0.65 },
+    detail: { land: 1, water: 1 },
+  };
 
 const FOREST_TYPES = new Set<TileType>([
   'temperateMixedForest',
@@ -47,9 +66,21 @@ export function proceduralElevationMeters(elevation: number): number {
   return clamped >= 0 ? clamped * 9000 : clamped * 11000;
 }
 
-export function proceduralSurfaceRadius(elevation: number, level: ProceduralWorldLodLevel): number {
-  if (level === 'global') return PROCEDURAL_RELIEF_PROFILE.baseRadius;
-  return elevationToRadius(proceduralElevationMeters(elevation), PROCEDURAL_RELIEF_PROFILE);
+export function proceduralReliefScale(level: ProceduralReliefLevel): ProceduralReliefScale {
+  const scale = PROCEDURAL_RELIEF_SCALES[level];
+  if (scale === undefined) throw new RangeError(`Unbekannte prozedurale Reliefstufe: ${level}`);
+  return scale;
+}
+
+export function proceduralSurfaceRadius(elevation: number, level: ProceduralReliefLevel): number {
+  const meters = proceduralElevationMeters(elevation);
+  const scale = proceduralReliefScale(level);
+  const profile: ReliefProfile = {
+    ...PROCEDURAL_RELIEF_PROFILE,
+    maxLandLift: PROCEDURAL_RELIEF_PROFILE.maxLandLift * scale.land,
+    maxOceanDrop: PROCEDURAL_RELIEF_PROFILE.maxOceanDrop * scale.water,
+  };
+  return elevationToRadius(meters, profile);
 }
 
 export function proceduralTileColor(
@@ -88,7 +119,7 @@ export function proceduralTerrainDiagnostics(
     if (cell.tileType === 'wetland' || cell.tileType === 'mangrove') groups.add('wetland');
     groups.add(reliefGroup(cell.relief));
   }
-  const radii = cells.map((cell) => proceduralSurfaceRadius(cell.elevation, 'regional'));
+  const radii = cells.map((cell) => proceduralSurfaceRadius(cell.elevation, 'detail'));
   return {
     terrainTypes,
     reliefBands,

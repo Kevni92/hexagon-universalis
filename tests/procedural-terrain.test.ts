@@ -2,24 +2,52 @@ import { describe, expect, it } from 'vitest';
 
 import {
   proceduralElevationMeters,
+  proceduralReliefScale,
   proceduralSurfaceRadius,
   proceduralTerrainDiagnostics,
   proceduralTileColor,
+  PROCEDURAL_RELIEF_SCALES,
 } from '@/rendering/ProceduralTerrain';
 import { createProceduralWorld, DEFAULT_PROCEDURAL_WORLD_CONFIG } from '@/world/proceduralWorld';
 
 describe('prozedurales Terrain-Rendering', () => {
-  it('bildet Tiefsee bis Hochgebirge monoton und innerhalb des Reliefbudgets ab', () => {
+  it('bildet Tiefsee bis Hochgebirge monoton und stufenabhängig innerhalb des Reliefbudgets ab', () => {
     const elevations = [-1, -0.62, -0.22, 0, 0.2, 0.45, 0.72, 1];
     const globalRadii = elevations.map((elevation) => proceduralSurfaceRadius(elevation, 'global'));
-    const radii = elevations.map((elevation) => proceduralSurfaceRadius(elevation, 'regional'));
+    const radii = elevations.map((elevation) => proceduralSurfaceRadius(elevation, 'detail'));
 
     expect(new Set(globalRadii)).toEqual(new Set([1]));
     expect(radii).toEqual([...radii].sort((left, right) => left - right));
     expect(radii[0]).toBeCloseTo(0.982, 6);
     expect(radii.at(-1)).toBeCloseTo(1.065, 6);
     expect(proceduralSurfaceRadius(0.45, 'regional')).toBeGreaterThan(1);
-    expect(proceduralSurfaceRadius(0.45, 'local')).toBe(proceduralSurfaceRadius(0.45, 'regional'));
+    expect(proceduralSurfaceRadius(0.45, 'local')).toBeGreaterThan(
+      proceduralSurfaceRadius(0.45, 'regional'),
+    );
+  });
+
+  it('definiert eine monotone siebenstufige Reliefkurve mit getrennten Land- und Wasserfaktoren', () => {
+    const orderedLevels = [
+      'global',
+      'continental',
+      'macroregional',
+      'regional',
+      'subregional',
+      'local',
+      'detail',
+    ] as const;
+    const landRadii = orderedLevels.map((level) => proceduralSurfaceRadius(1, level));
+    const waterRadii = orderedLevels.map((level) => proceduralSurfaceRadius(-1, level));
+
+    expect(PROCEDURAL_RELIEF_SCALES.global).toEqual({ land: 0, water: 0 });
+    expect(PROCEDURAL_RELIEF_SCALES.detail).toEqual({ land: 1, water: 1 });
+    expect(proceduralReliefScale('subregional')).toEqual({ land: 0.5, water: 0.38 });
+    expect(landRadii).toEqual([...landRadii].sort((left, right) => left - right));
+    expect(waterRadii).toEqual([...waterRadii].sort((left, right) => right - left));
+    expect(landRadii[0]).toBe(1);
+    expect(waterRadii[0]).toBe(1);
+    expect(landRadii.at(-1)).toBeCloseTo(1.065, 6);
+    expect(waterRadii.at(-1)).toBeCloseTo(0.982, 6);
   });
 
   it('überführt normalisierte Höhen in dokumentierte Meterwerte', () => {
