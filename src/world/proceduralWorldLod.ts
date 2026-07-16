@@ -81,6 +81,21 @@ export const PROCEDURAL_LOD_PROFILES: Readonly<
     maxDrawCalls: 1,
     generationBudgetMs: 180,
   },
+  ultra: {
+    density: 'ultra',
+    quality: {
+      name: 'procedural-ultra-experimental',
+      levels: {
+        global: level(16, Infinity, 0, 1),
+        regional: level(55, 18, 17, 24),
+        local: level(144, 28, 20, 32),
+      },
+    },
+    levelCellCounts: { global: 2562, regional: 30252, local: 207362 },
+    maxActiveCells: 16_384,
+    maxDrawCalls: 33,
+    generationBudgetMs: 250,
+  },
 };
 
 export interface ProceduralLodCell {
@@ -240,8 +255,14 @@ export function validateProceduralLodProfiles(): void {
       PROCEDURAL_DENSITY_PROFILES[density as ProceduralDensityProfileId].cellCount
     )
       throw new RangeError(`Globale Zellzahl passt nicht zum Dichteprofil ${density}.`);
-    const largestLevel = Math.max(...Object.values(profile.levelCellCounts));
-    if (profile.maxDrawCalls !== 1 || profile.maxActiveCells < largestLevel)
+    const finestLevel = profile.levelCellCounts.local;
+    const expectedActiveCells =
+      profile.density === 'ultra' ? 16_384 : Math.max(...Object.values(profile.levelCellCounts));
+    if (profile.maxActiveCells !== expectedActiveCells)
+      throw new RangeError(`Ungültiges aktives Zellbudget für ${density}.`);
+    if (profile.density !== 'ultra' && profile.maxDrawCalls !== 1)
+      throw new RangeError(`Ungültiges Draw-Call-Budget für ${density}.`);
+    if (profile.density === 'ultra' && (finestLevel < 200_000 || profile.maxDrawCalls > 33))
       throw new RangeError(`Ungültiges Laufzeitbudget für ${density}.`);
   }
 }

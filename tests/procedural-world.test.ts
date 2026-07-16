@@ -80,7 +80,7 @@ describe('prozedurales Weltmodell', () => {
   });
 
   it('weist unterstützte Dichten und tatsächliche Zellzahlen korrekt aus', () => {
-    for (const density of ['low', 'standard'] as const) {
+    for (const density of ['low', 'standard', 'ultra'] as const) {
       const world = createProceduralWorld({ density });
       const profile = PROCEDURAL_DENSITY_PROFILES[density];
       expect(world.frequency).toBe(profile.frequency);

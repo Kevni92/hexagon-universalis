@@ -70,11 +70,19 @@ und Viewportmaß benötigt. Damit prüfen Tests reale Arbeit statt instabiler Ru
 Die ausgewählte Dichte bezeichnet die globale Referenzauflösung aus #77. Regional und Lokal
 erhöhen die geometrische Frequenz darüber hinaus. Für Frequenz `f` gilt `10 × f² + 2` Zellen.
 
-| Dichte     |      Global |    Regional |        Lokal | Regional ein/aus | Lokal ein/aus | max. aktive Zellen | Draw Calls | Zielbudget Generierung |
-| ---------- | ----------: | ----------: | -----------: | ---------------: | ------------: | -----------------: | ---------: | ---------------------: |
-| `low`      |    f4 / 162 |    f8 / 642 |  f16 / 2.562 |       70 / 66 px |    70 / 52 px |              2.562 |          1 |                  40 ms |
-| `standard` |    f8 / 642 | f16 / 2.562 | f32 / 10.242 |       35 / 34 px |    55 / 40 px |             10.242 |          1 |                  90 ms |
-| `high`     | f16 / 2.562 | f24 / 5.762 | f32 / 10.242 |       18 / 17 px |    28 / 20 px |             10.242 |          1 |                 180 ms |
+| Dichte     |      Global |     Regional |          Lokal | Regional ein/aus | Lokal ein/aus | max. aktive Zellen | Draw Calls | Zielbudget Generierung |
+| ---------- | ----------: | -----------: | -------------: | ---------------: | ------------: | -----------------: | ---------: | ---------------------: |
+| `low`      |    f4 / 162 |     f8 / 642 |    f16 / 2.562 |       70 / 66 px |    70 / 52 px |              2.562 |          1 |                  40 ms |
+| `standard` |    f8 / 642 |  f16 / 2.562 |   f32 / 10.242 |       35 / 34 px |    55 / 40 px |             10.242 |          1 |                  90 ms |
+| `high`     | f16 / 2.562 |  f24 / 5.762 |   f32 / 10.242 |       18 / 17 px |    28 / 20 px |             10.242 |          1 |                 180 ms |
+| `ultra`    | f16 / 2.562 | f55 / 30.252 | f144 / 207.362 |       18 / 17 px |    28 / 20 px |             16.384 |         33 |                 250 ms |
+
+`ultra` ist ein opt-in Experiment. Die vollständige Detailzellzahl ist eine
+globale Adressierungsgröße; aktiv dürfen auf Desktop höchstens 32 Chunks
+beziehungsweise 16.384 Zellen materialisiert werden. Das Draw-Call-Budget von
+33 entspricht ADR 0002: maximal 32 aktive Chunks plus gemeinsames Substrat.
+Zusätzliche Puffer für den späteren Globe-/Flat-Austausch und Rezentrierung
+aus ADR 0003 sind in #107 erneut zu vermessen.
 
 Die Werte vor und nach dem Schrägstrich sind Einschalt- und Ausschaltschwelle der Pixelhysterese,
 normiert auf eine Referenz-Viewporthöhe von 720 Pixeln. Dadurch liegen die Stufenwechsel auf
