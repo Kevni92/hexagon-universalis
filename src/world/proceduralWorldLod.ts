@@ -170,6 +170,7 @@ export class ProceduralWorldLod {
   private readonly projectedById = new Map<string, ProceduralLodCell>();
   private readonly colorsById = new Map<string, string>();
   private readonly projectionKeysById = new Map<string, string>();
+  private readonly projectedUnitGenerations = new WeakMap<VisibleUnit, number>();
   private readonly ultraDetailCache = new UltraDetailChunkCache();
   private refinementNoise: SeededNoise3D;
   private ultraRuntime: SevenLevelWorldLodRuntime | null = null;
@@ -279,6 +280,7 @@ export class ProceduralWorldLod {
 
   private projectUnits(units: readonly VisibleUnit[]): void {
     for (const unit of units) {
+      if (this.projectedUnitGenerations.get(unit) === this.generation) continue;
       for (const [index, lodCell] of unit.cells.entries()) {
         const id = visibleCellId(unit, index);
         const projectionKey = `${lodCell.cell.center.x.toFixed(5)},${lodCell.cell.center.y.toFixed(5)},${lodCell.cell.center.z.toFixed(5)}`;
@@ -302,6 +304,7 @@ export class ProceduralWorldLod {
         this.colorsById.set(id, this.colorForCell(source));
         this.projectionKeysById.set(id, projectionKey);
       }
+      this.projectedUnitGenerations.set(unit, this.generation);
     }
   }
 
