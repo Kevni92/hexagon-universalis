@@ -35,11 +35,11 @@ describe('ProceduralWorldLod', () => {
     });
     expect(PROCEDURAL_LOD_PROFILES.ultra.levelCellCounts).toEqual({
       global: 2562,
-      regional: 30252,
-      local: 207362,
+      regional: 5762,
+      local: 10242,
     });
-    expect(PROCEDURAL_LOD_PROFILES.ultra.maxActiveCells).toBe(16_384);
-    expect(PROCEDURAL_LOD_PROFILES.ultra.maxDrawCalls).toBe(33);
+    expect(PROCEDURAL_LOD_PROFILES.ultra.maxActiveCells).toBe(10242);
+    expect(PROCEDURAL_LOD_PROFILES.ultra.maxDrawCalls).toBe(1);
 
     for (const profile of Object.values(PROCEDURAL_LOD_PROFILES)) {
       const { global, regional, local } = profile.quality.levels;
@@ -47,6 +47,16 @@ describe('ProceduralWorldLod', () => {
       expect(regional.frequency).toBeLessThan(local.frequency);
       expect(profile.maxActiveCells).toBeLessThanOrEqual(profile.levelCellCounts.local);
     }
+  });
+
+  it('materialisiert Ultra beim Zoomen ohne Frequenzen oberhalb des Geodesic-Limits', () => {
+    const world = new ProceduralWorldLod({ seed: 'ultra-zoom-regression', density: 'ultra' });
+
+    expect(() => world.update(camera(2.8))).not.toThrow();
+    const local = world.update(camera(1.2));
+
+    expect(new Set(local.map((unit) => unit.level))).toEqual(new Set([2]));
+    expect(cellsAtLevel(local, 2)).toHaveLength(10242);
   });
 
   it('erreicht mit denselben Generatorparametern alle drei benannten Weltstufen', () => {
