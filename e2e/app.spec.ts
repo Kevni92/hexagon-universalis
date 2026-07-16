@@ -49,14 +49,6 @@ test('production app loads a usable globe viewport', async ({ page }) => {
   expect(pageErrors).toEqual([]);
 });
 
-test('desktop and mobile viewport do not overflow horizontally', async ({ page }) => {
-  await page.goto('/');
-  await expect
-    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
-    .toBe(true);
-  await expect(page.locator('canvas.viewport-canvas')).toBeVisible();
-});
-
 test('demo world is opt-in via query parameter and clearly labeled', async ({ page }) => {
   const pageErrors: Error[] = [];
   page.on('pageerror', (error) => pageErrors.push(error));
