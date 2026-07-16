@@ -26,8 +26,27 @@ Anschließend wird das logarithmische Spiel-Relief aus `Relief.ts` mit einem eng
 - Meeresspiegelradius: `1`
 - maximale Landanhebung: `0,065`
 - maximale Ozeanabsenkung: `0,018`
-- Global: einheitlicher Radius `1`, also bewusst kein Relief
-- Regional und Lokal: identisches Höhenrelief ohne künstlichen radialen Stufenversatz
+- Die fachliche Höhe bleibt unverändert; nur die Renderamplitude wird durch
+  eine zentrale LOD-Kurve skaliert.
+
+Für die siebenstufige Zielarchitektur gilt getrennt für Landhebung und
+Ozeanabsenkung:
+
+| Stufe         | Landfaktor | Wasserfaktor |
+| ------------- | ---------: | -----------: |
+| Global        |       0,00 |         0,00 |
+| Kontinental   |       0,08 |         0,04 |
+| Makroregional |       0,18 |         0,10 |
+| Regional      |       0,32 |         0,20 |
+| Subregional   |       0,50 |         0,38 |
+| Lokal         |       0,72 |         0,65 |
+| Detail        |       1,00 |         1,00 |
+
+Global besitzt dadurch exakt den einheitlichen Radius `1`. Jede feinere Stufe
+erhöht die sichtbare Reliefamplitude monoton. Die bestehende Drei-Stufen-
+Runtime nutzt bis zur vollständigen Migration dieselbe zentrale Kurve über die
+Namen `global`, `regional` und `local`; spätere Flat-Projektionen aus #108
+wenden denselben Faktor entlang der lokalen Hochachse aus ADR 0003 an.
 
 Die Abbildung ist monoton: Tiefsee liegt stets unter Flachwasser, Flachland unter Hügeln, Hügel unter Gebirge und Gebirge unter Hochgebirge.
 
@@ -90,5 +109,7 @@ Der prozedurale Canvas veröffentlicht für Tests und Diagnose:
 - `data-relief-bands`
 - `data-relief-minimum`
 - `data-relief-maximum`
+- `data-relief-land-factor`
+- `data-relief-water-factor`
 
 Unit- und Renderingtests prüfen Deck-/Seitendreiecke, Basissradius, Substratradius, radiale Grenzen, Picking-Ausschluss, Picking-IDs, exklusive Volltopologien, Draw Calls und Dispose. Playwright reproduziert die Lokalansicht zusätzlich mit Seed `fgh`, Dichte `Niedrig` und schräger Kameraperspektive; der Bericht enthält einen Abnahme-Screenshot.

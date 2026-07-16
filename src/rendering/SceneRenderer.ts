@@ -17,6 +17,7 @@ import { computeLocalCameraState } from './CameraFrame';
 import { ProceduralDetailRenderer } from './ProceduralDetails';
 import { PROCEDURAL_CAMERA_RANGE } from './ProceduralCamera';
 import {
+  proceduralReliefScale,
   proceduralSurfaceRadius,
   proceduralTerrainDiagnostics,
   proceduralTileColor,
@@ -374,7 +375,11 @@ export class SceneRenderer {
     this.chunkRenderer.update(this.visibleUnits);
     const canvas = this.renderer.domElement;
     if (this.proceduralWorldLod !== null) {
-      canvas.dataset.lodLevel = this.activeResolutionLevel ?? 'global';
+      const activeLevel = this.activeResolutionLevel ?? 'global';
+      const reliefScale = proceduralReliefScale(activeLevel);
+      canvas.dataset.lodLevel = activeLevel;
+      canvas.dataset.reliefLandFactor = reliefScale.land.toFixed(2);
+      canvas.dataset.reliefWaterFactor = reliefScale.water.toFixed(2);
       const focusDiagnostics = createLodFocusDiagnostics(cameraState, this.visibleUnits);
       canvas.dataset.lodFocusDirection = formatVector(focusDiagnostics.focusDirection);
       canvas.dataset.lodRegionalParents = focusDiagnostics.regionalParentIds.join(',');
