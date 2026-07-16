@@ -179,10 +179,10 @@ describe('prozedurales Weltmodell', () => {
     };
 
     expect(fingerprints).toEqual({
-      alphaLow: 'pw1-b493a193',
-      alphaStandard: 'pw1-2c95e43d',
-      betaLow: 'pw1-479f6748',
-      betaStandard: 'pw1-f2419ef2',
+      alphaLow: 'pw1-8ebf87f6',
+      alphaStandard: 'pw1-352fb196',
+      betaLow: 'pw1-24719400',
+      betaStandard: 'pw1-86d3247b',
     });
   });
 });
