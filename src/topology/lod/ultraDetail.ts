@@ -8,6 +8,8 @@ export const ULTRA_DETAIL_FREQUENCY = 144;
 export const ULTRA_DETAIL_CELL_COUNT = 10 * ULTRA_DETAIL_FREQUENCY ** 2 + 2;
 export const ULTRA_DETAIL_CHUNK_CELL_COUNT = 480;
 export const ULTRA_DETAIL_MAX_ACTIVE_CHUNKS = 32;
+export const ULTRA_INTERACTIVE_MAX_LEVEL: WorldLodLevelName = 'local';
+export const ULTRA_PRELOAD_STAGE_WORK = 6;
 
 // The generic legacy CellId contract still models three render levels. Ultra
 // keeps its own level-qualified formatted IDs while reusing the local numeric
@@ -18,7 +20,7 @@ const CHUNK_ROWS = 24;
 const CHUNK_COLUMNS = 20;
 
 export interface DetailChunkProfile {
-  readonly worldLevel: Exclude<WorldLodLevelName, 'global'>;
+  readonly worldLevel: WorldLodLevelName;
   readonly frequency: number;
   readonly rows: number;
   readonly columns: number;
@@ -29,6 +31,13 @@ export const ULTRA_DETAIL_CHUNK_PROFILE: DetailChunkProfile = {
   frequency: ULTRA_DETAIL_FREQUENCY,
   rows: CHUNK_ROWS,
   columns: CHUNK_COLUMNS,
+};
+
+export const ULTRA_GLOBAL_PROFILE: DetailChunkProfile = {
+  worldLevel: 'global',
+  frequency: 8,
+  rows: 1,
+  columns: 1,
 };
 
 export const ULTRA_INTERMEDIATE_CHUNK_PROFILES: Readonly<
@@ -55,13 +64,13 @@ export interface UltraDetailProgress {
 export class UltraDetailChunkCache {
   private readonly chunks = new Map<string, VisibleUnit>();
   private readonly fullUnitsByProfile = new Map<string, VisibleUnit>();
+  private readonly readyUnitsByKey = new Map<string, readonly VisibleUnit[]>();
   private readonly metadata = new Map<
     string,
     { readonly focusKey: string; readonly profileKey: string }
   >();
   private readyUnits: readonly VisibleUnit[] = [];
   private readyKey = '';
-  private readyProfileKey = '';
   private pendingKey = '';
   private requestToken = 0;
   private revisionValue = 0;
@@ -77,10 +86,10 @@ export class UltraDetailChunkCache {
   public clear(): void {
     this.chunks.clear();
     this.fullUnitsByProfile.clear();
+    this.readyUnitsByKey.clear();
     this.metadata.clear();
     this.readyUnits = [];
     this.readyKey = '';
-    this.readyProfileKey = '';
     this.pendingKey = '';
     this.requestToken += 1;
   }
@@ -102,12 +111,17 @@ export class UltraDetailChunkCache {
     profile: DetailChunkProfile = ULTRA_DETAIL_CHUNK_PROFILE,
   ): readonly VisibleUnit[] {
     const key = requestKey(addresses, focus, profile);
-    const profileKey = profileIdentity(profile);
     if (key === this.readyKey) return this.readyUnits;
 
-    if (this.readyProfileKey !== profileKey || this.readyUnits.length === 0) {
+    const ready = this.readyUnitsByKey.get(key);
+    if (ready !== undefined) {
+      this.activate(key, ready);
+      return ready;
+    }
+
+    if (this.readyUnits.length === 0) {
       const units = this.units(addresses, focus, profile);
-      this.activate(key, profileKey, units);
+      this.activate(key, units);
       return units;
     }
 
@@ -116,17 +130,17 @@ export class UltraDetailChunkCache {
       const token = ++this.requestToken;
       void this.warm(addresses, focus, undefined, undefined, profile).then(() => {
         if (token !== this.requestToken || this.pendingKey !== key) return;
-        this.activate(key, profileKey, this.units(addresses, focus, profile));
+        this.activate(key, this.units(addresses, focus, profile));
         this.pendingKey = '';
       });
     }
     return this.readyUnits;
   }
 
-  public activate(key: string, profileKey: string, units: readonly VisibleUnit[]): void {
+  public activate(key: string, units: readonly VisibleUnit[]): void {
     this.readyKey = key;
-    this.readyProfileKey = profileKey;
     this.readyUnits = units;
+    this.readyUnitsByKey.set(key, units);
     this.revisionValue += 1;
   }
 
@@ -136,7 +150,7 @@ export class UltraDetailChunkCache {
     profile: DetailChunkProfile = ULTRA_DETAIL_CHUNK_PROFILE,
   ): readonly VisibleUnit[] {
     const units = this.units(addresses, focus, profile);
-    this.activate(requestKey(addresses, focus, profile), profileIdentity(profile), units);
+    this.activate(requestKey(addresses, focus, profile), units);
     return units;
   }
 
@@ -145,8 +159,8 @@ export class UltraDetailChunkCache {
     const cached = this.fullUnitsByProfile.get(profileKey);
     if (cached !== undefined) return cached;
     const key = `lvl${levelDepth(profile.worldLevel)}-${profile.worldLevel}/full`;
-    // f34 is the highest complete intermediate topology. f55+ remains
-    // chunk-addressed and is never materialized as one full sphere.
+    // f89 is the highest complete topology used by the interactive ultra cap.
+    // f144 remains addressable but is never materialized automatically.
     const topology = createGeodesicTopology(profile.frequency);
     const cells = topology.cells.map((cell, index) => {
       const formattedId = `${key}/c${index}`;
@@ -160,7 +174,14 @@ export class UltraDetailChunkCache {
     });
     const unit: VisibleUnit = {
       key,
-      level: profile.worldLevel === 'local' ? 2 : 1,
+      level:
+        profile.worldLevel === 'global'
+          ? 0
+          : profile.worldLevel === 'detail'
+            ? 3
+            : profile.worldLevel === 'local'
+              ? 2
+              : 1,
       worldLevel: profile.worldLevel,
       cells,
       cellIds: cells.map((cell) => cell.formattedId),

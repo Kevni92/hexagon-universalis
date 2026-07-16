@@ -3,19 +3,15 @@ import type { Vector3 } from '@/topology/geodesic';
 import { visibleCellId, type VisibleUnit } from '@/topology/lod/WorldLod';
 import type { QualityProfile } from '@/topology/lod/profiles';
 import { cameraFocusDirection, type CameraState } from '@/topology/lod/selection';
-import {
-  selectActiveChunkAddresses,
-  SevenLevelWorldLodRuntime,
-} from '@/topology/lod/sevenLevelRuntime';
-import {
-  WORLD_LOD_LEVELS,
-  WORLD_LOD_PLATFORM_BUDGETS,
-  type WorldLodLevelName,
-} from '@/topology/lod/sevenLevelArchitecture';
+import { SevenLevelWorldLodRuntime } from '@/topology/lod/sevenLevelRuntime';
+import { WORLD_LOD_LEVELS, type WorldLodLevelName } from '@/topology/lod/sevenLevelArchitecture';
 import {
   ULTRA_DETAIL_CELL_COUNT,
   ULTRA_DETAIL_MAX_ACTIVE_CHUNKS,
   ULTRA_DETAIL_CHUNK_PROFILE,
+  ULTRA_GLOBAL_PROFILE,
+  ULTRA_INTERACTIVE_MAX_LEVEL,
+  ULTRA_PRELOAD_STAGE_WORK,
   ULTRA_INTERMEDIATE_CHUNK_PROFILES,
   UltraDetailChunkCache,
   type UltraDetailProgress,
@@ -35,6 +31,17 @@ import { createSeededNoise3D, type SeededNoise3D } from './seededNoise';
 
 export type ProceduralWorldLodLevel = WorldLodLevelName;
 export type ProceduralCellColor = (cell: ProceduralWorldCell) => string;
+
+const REFERENCE_INDEX_LATITUDE_BINS = 64;
+const REFERENCE_INDEX_LONGITUDE_BINS = 128;
+const referenceSpatialIndices = new WeakMap<
+  readonly ProceduralWorldCell[],
+  ReferenceSpatialIndex
+>();
+
+interface ReferenceSpatialIndex {
+  readonly bins: ReadonlyMap<string, readonly ProceduralWorldCell[]>;
+}
 
 export interface ProceduralLodBudgetProfile {
   readonly density: ProceduralDensityProfileId;
@@ -185,6 +192,7 @@ export class ProceduralWorldLod {
             platform: 'desktop',
             refineAbovePx: 18,
             coarsenBelowPx: 12,
+            maxLevel: ULTRA_INTERACTIVE_MAX_LEVEL,
           })
         : null;
     this.activeFrequencyValue = this.profile.quality.levels.global.frequency;
@@ -236,24 +244,23 @@ export class ProceduralWorldLod {
     let units: readonly VisibleUnit[];
     if (this.ultraRuntime !== null) {
       const frame = this.ultraRuntime.update(camera);
-      this.activeLevelValue = frame.level.name;
-      this.activeFrequencyValue = frame.level.frequency;
       const profile =
-        frame.level.name === 'detail'
-          ? ULTRA_DETAIL_CHUNK_PROFILE
-          : frame.level.name === 'global'
-            ? null
+        frame.level.name === 'global'
+          ? ULTRA_GLOBAL_PROFILE
+          : frame.level.name === 'detail'
+            ? ULTRA_DETAIL_CHUNK_PROFILE
             : ULTRA_INTERMEDIATE_CHUNK_PROFILES[frame.level.name];
       units =
-        profile === null
-          ? this.controller.update(camera)
-          : frame.level.frequency <= 34
-            ? [this.ultraDetailCache.fullUnit(profile)]
-            : this.ultraDetailCache.request(
-                frame.activeChunks,
-                cameraFocusDirection(camera),
-                profile,
-              );
+        frame.level.frequency <= 89
+          ? [this.ultraDetailCache.fullUnit(profile)]
+          : this.ultraDetailCache.request(
+              frame.activeChunks,
+              cameraFocusDirection(camera),
+              profile,
+            );
+      const displayedLevel = units[0]?.worldLevel ?? frame.level.name;
+      this.activeLevelValue = displayedLevel;
+      this.activeFrequencyValue = worldLevelFrequency(displayedLevel);
     } else {
       units = this.controller.update(camera);
       const maximumLevel = Math.min(2, Math.max(...units.map((unit) => unit.level)));
@@ -299,7 +306,7 @@ export class ProceduralWorldLod {
   }
 
   public async prepare(
-    camera: CameraState,
+    _camera: CameraState,
     onProgress?: (progress: UltraDetailProgress) => void,
   ): Promise<readonly VisibleUnit[]> {
     this.assertActive();
@@ -309,17 +316,44 @@ export class ProceduralWorldLod {
       return [];
     }
 
-    const detailLevel = WORLD_LOD_LEVELS[WORLD_LOD_LEVELS.length - 1]!;
-    const addresses = selectActiveChunkAddresses(
-      detailLevel,
-      camera,
-      WORLD_LOD_PLATFORM_BUDGETS.desktop,
-    );
-    const focus = cameraFocusDirection(camera);
-    await this.ultraDetailCache.warm(addresses, focus, onProgress, (unit) =>
-      this.projectUnits([unit]),
-    );
-    return this.ultraDetailCache.activateReady(addresses, focus, ULTRA_DETAIL_CHUNK_PROFILE);
+    const profile = ultraProfile(ULTRA_INTERACTIVE_MAX_LEVEL);
+    onProgress?.({ completed: 0, total: 1 });
+    await yieldToBrowser();
+    const unit = this.ultraDetailCache.fullUnit(profile);
+    this.projectUnits([unit]);
+    onProgress?.({ completed: 1, total: 1 });
+    return [unit];
+  }
+
+  /** Baut alle interaktiven Ultra-Stufen vor dem ersten Zoom vor. */
+  public async prepareAll(
+    _camera: CameraState,
+    onProgress?: (progress: UltraDetailProgress) => void,
+  ): Promise<readonly VisibleUnit[]> {
+    this.assertActive();
+    if (this.configValue.density !== 'ultra' || this.ultraRuntime === null) {
+      onProgress?.({ completed: 1, total: 1 });
+      await yieldToBrowser();
+      return [];
+    }
+
+    const prepared: VisibleUnit[] = [];
+    let completed = 0;
+    onProgress?.({ completed, total: ULTRA_PRELOAD_STAGE_WORK });
+    const maximumDepth =
+      WORLD_LOD_LEVELS.find((level) => level.name === ULTRA_INTERACTIVE_MAX_LEVEL)?.depth ?? 0;
+
+    for (const level of WORLD_LOD_LEVELS.filter((candidate) => candidate.depth <= maximumDepth)) {
+      const profile = ultraProfile(level.name);
+      const unit = this.ultraDetailCache.fullUnit(profile);
+      prepared.push(unit);
+      this.projectUnits([unit]);
+      completed += 1;
+      onProgress?.({ completed, total: ULTRA_PRELOAD_STAGE_WORK });
+      await yieldToBrowser();
+    }
+
+    return prepared;
   }
 
   public projectedCell(cellId: string): ProceduralLodCell | undefined {
@@ -361,6 +395,7 @@ export class ProceduralWorldLod {
               platform: 'desktop',
               refineAbovePx: 18,
               coarsenBelowPx: 12,
+              maxLevel: ULTRA_INTERACTIVE_MAX_LEVEL,
             })
           : null;
     }
@@ -446,16 +481,28 @@ function defaultProceduralCellColor(cell: ProceduralWorldCell): string {
   return TILE_PROFILES[cell.tileType].color;
 }
 
+function ultraProfile(level: import('@/topology/lod/sevenLevelArchitecture').WorldLodLevelName) {
+  if (level === 'global') return ULTRA_GLOBAL_PROFILE;
+  if (level === 'detail') return ULTRA_DETAIL_CHUNK_PROFILE;
+  return ULTRA_INTERMEDIATE_CHUNK_PROFILES[level];
+}
+
+function worldLevelFrequency(level: WorldLodLevelName): number {
+  return WORLD_LOD_LEVELS.find((candidate) => candidate.name === level)?.frequency ?? 0;
+}
+
 function nearestWorldCell(
   center: Vector3,
   cells: readonly ProceduralWorldCell[],
 ): ProceduralWorldCell {
   const first = cells[0];
   if (first === undefined) throw new RangeError('Referenzwelt enthält keine Zellen.');
+  const spatialIndex = referenceSpatialIndex(cells);
+  const candidates = indexedCandidates(center, spatialIndex);
   let nearest = first;
   let nearestDot = dot(center, first.center);
-  for (let index = 1; index < cells.length; index += 1) {
-    const candidate = cells[index];
+  for (const candidate of candidates.length > 0 ? candidates : cells) {
+    if (candidate === first) continue;
     if (candidate === undefined) continue;
     const candidateDot = dot(center, candidate.center);
     if (candidateDot <= nearestDot) continue;
@@ -463,6 +510,63 @@ function nearestWorldCell(
     nearestDot = candidateDot;
   }
   return nearest;
+}
+
+function referenceSpatialIndex(cells: readonly ProceduralWorldCell[]): ReferenceSpatialIndex {
+  const cached = referenceSpatialIndices.get(cells);
+  if (cached !== undefined) return cached;
+  const bins = new Map<string, ProceduralWorldCell[]>();
+  for (const cell of cells) {
+    const key = referenceBinKey(cell.center);
+    const bin = bins.get(key);
+    if (bin === undefined) bins.set(key, [cell]);
+    else bin.push(cell);
+  }
+  const index: ReferenceSpatialIndex = { bins };
+  referenceSpatialIndices.set(cells, index);
+  return index;
+}
+
+function indexedCandidates(
+  center: Vector3,
+  index: ReferenceSpatialIndex,
+): readonly ProceduralWorldCell[] {
+  const { row, column } = referenceBinPosition(center);
+  const candidates: ProceduralWorldCell[] = [];
+  for (let rowOffset = -1; rowOffset <= 1; rowOffset += 1) {
+    const candidateRow = row + rowOffset;
+    if (candidateRow < 0 || candidateRow >= REFERENCE_INDEX_LATITUDE_BINS) continue;
+    for (let columnOffset = -1; columnOffset <= 1; columnOffset += 1) {
+      const candidateColumn =
+        (column + columnOffset + REFERENCE_INDEX_LONGITUDE_BINS) % REFERENCE_INDEX_LONGITUDE_BINS;
+      const bin = index.bins.get(`${candidateRow}:${candidateColumn}`);
+      if (bin !== undefined) candidates.push(...bin);
+    }
+  }
+  return candidates;
+}
+
+function referenceBinKey(center: Vector3): string {
+  const { row, column } = referenceBinPosition(center);
+  return `${row}:${column}`;
+}
+
+function referenceBinPosition(center: Vector3): { readonly row: number; readonly column: number } {
+  const latitude = Math.asin(Math.min(1, Math.max(-1, center.y)));
+  const longitude = Math.atan2(center.x, center.z);
+  return {
+    row: Math.min(
+      REFERENCE_INDEX_LATITUDE_BINS - 1,
+      Math.max(0, Math.floor(((latitude + Math.PI / 2) / Math.PI) * REFERENCE_INDEX_LATITUDE_BINS)),
+    ),
+    column: Math.min(
+      REFERENCE_INDEX_LONGITUDE_BINS - 1,
+      Math.max(
+        0,
+        Math.floor(((longitude + Math.PI) / (2 * Math.PI)) * REFERENCE_INDEX_LONGITUDE_BINS),
+      ),
+    ),
+  };
 }
 
 function levelName(level: 0 | 1 | 2 | 3): ProceduralWorldLodLevel {

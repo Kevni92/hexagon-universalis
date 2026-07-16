@@ -10,6 +10,7 @@ import { EarthChunkRuntime, type EarthRuntimeStatus } from '@/data/EarthChunkRun
 import { EarthWorldModel } from '@/data/EarthWorldModel';
 import { ProceduralWorldLod, type ProceduralWorldLodLevel } from '@/world/proceduralWorldLod';
 import type { ProceduralWorldConfig } from '@/world/proceduralWorld';
+import { ULTRA_PRELOAD_STAGE_WORK } from '@/topology/lod/ultraDetail';
 
 import { createCellGlobeMesh } from './CellGlobe';
 import { ChunkRenderer, LOD_TRANSITION_DURATION_SECONDS } from './ChunkRenderer';
@@ -269,7 +270,7 @@ export class SceneRenderer {
       return current;
     }
     const targetIsUltra = (config.density ?? this.proceduralWorldLod.config.density) === 'ultra';
-    const progressTotal = targetIsUltra ? 64 : 1;
+    const progressTotal = targetIsUltra ? ULTRA_PRELOAD_STAGE_WORK * 2 : 1;
     this.proceduralOptions.onProceduralProgress?.({
       phase: 'preparing',
       completed: 0,
@@ -278,21 +279,26 @@ export class SceneRenderer {
     });
     try {
       this.proceduralWorldLod.reconfigure(config);
-      const preparedUnits = await this.proceduralWorldLod.prepare(
-        this.currentCameraState(),
-        (progress) => {
-          this.proceduralOptions.onProceduralProgress?.({
-            phase: 'preparing',
-            completed: progress.completed,
-            total: progressTotal,
-            message:
-              progress.total > 1
-                ? `Ultra-Detail wird vorbereitet … ${progress.completed}/${progress.total} Chunks`
-                : 'Welt wird vorbereitet …',
-          });
-        },
-      );
-      this.updateLod();
+      const preparedUnits = await (targetIsUltra
+        ? this.proceduralWorldLod.prepareAll(this.currentCameraState(), (progress) => {
+            this.proceduralOptions.onProceduralProgress?.({
+              phase: 'preparing',
+              completed: progress.completed,
+              total: progressTotal,
+              message:
+                progress.total > 1
+                  ? `Ultra-Detail wird vorbereitet … ${progress.completed}/${progress.total} Chunks`
+                  : 'Welt wird vorbereitet …',
+            });
+          })
+        : this.proceduralWorldLod.prepare(this.currentCameraState(), (progress) => {
+            this.proceduralOptions.onProceduralProgress?.({
+              phase: 'preparing',
+              completed: progress.completed,
+              total: progressTotal,
+              message: 'Welt wird vorbereitet â€¦',
+            });
+          }));
       this.chunkRenderer.setCellColors(this.proceduralWorldLod.cellColors, this.visibleUnits);
       if (preparedUnits.length > 0 && this.proceduralDetails !== null) {
         this.proceduralDetails.update(
@@ -304,12 +310,15 @@ export class SceneRenderer {
         await this.chunkRenderer.preload(preparedUnits, (progress) => {
           this.proceduralOptions.onProceduralProgress?.({
             phase: 'preparing',
-            completed: preparedUnits.length + progress.completed,
+            completed: targetIsUltra
+              ? ULTRA_PRELOAD_STAGE_WORK + progress.completed
+              : progress.completed,
             total: progressTotal,
             message: `Detail-Geometrie wird vorbereitet … ${progress.completed}/${progress.total} Chunks`,
           });
         });
       }
+      this.updateLod();
       this.publishProceduralWorkDiagnostics();
       const next = this.proceduralState;
       if (next === null) throw new Error('Die prozedurale Testwelt ist nicht aktiv.');

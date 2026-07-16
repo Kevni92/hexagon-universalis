@@ -2,9 +2,12 @@
 
 ## Ultra-Implementierung (#107)
 
-Die Ultra-Runtime nutzt die sieben Stufen `f8`, `f13`, `f21`, `f34`, `f55`, `f89` und `f144`.
-Zwischenstufen werden als 512-Zellen-Chunks erzeugt; die Detailstufe verwendet 32 Chunks mit je
-480 Zellen. Die fachliche Ultra-Referenz wird mit `f21` erzeugt und durch seeded Detail-Noise
+Die Ultra-Runtime kennt die sieben Stufen `f8`, `f13`, `f21`, `f34`, `f55`, `f89` und `f144`.
+Interaktiv reicht sie bis `local / f89 / 79.212` Zellen. Diese Stufe wird als geschlossene
+Kugeltopologie materialisiert und bleibt dadurch auch bei Rotation lückenfrei. `detail / f144 /
+207.362` bleibt als adressierbare Experimentstufe dokumentiert, wird aber nicht automatisch
+geladen oder gerendert. Die fachliche Ultra-Referenz wird mit `f21` erzeugt und durch seeded
+Detail-Noise
 verfeinert. Dadurch entstehen innerhalb einer LOD-Stufe unterschiedliche HÃ¶hen, und die
 Reliefamplitude nimmt beim Hineinzoomen zu.
 
@@ -12,12 +15,6 @@ Bei Fokus- oder Rotationswechseln streamt der Chunk-Cache den neuen vollstÃ¤nd
 Zeitscheiben. Bis zur Aktivierung bleibt der vorherige vollstÃ¤ndige Satz sichtbar. Ein
 Streaming-Revision-Key sorgt dafÃ¼r, dass der neue Satz nach Fertigstellung ohne sichtbare leere
 Chunks atomar in den Renderer gelangt.
-
-> Der aktuelle Runtime-Stand dieses Dokuments beschreibt weiterhin die
-> implementierte Drei-Stufen-Pipeline. Die verbindliche Zielarchitektur für
-> sieben Stufen, sichtbereichsgechunkte Materialisierung und Desktop-/Mobile-
-> Budgets ist in [ADR 0002](./architecture/0002-seven-level-world-lod.md)
-> festgelegt. Die Runtime-Migration erfolgt in #97.
 
 Issue #78 verbindet das deterministische Weltmodell aus #77 mit der geodätischen Topologie aus
 ADR 0001. Issue #91 balanciert Kamera und prozedurale Darstellung so aus, dass im Viewport nie
@@ -83,20 +80,19 @@ und Viewportmaß benötigt. Damit prüfen Tests reale Arbeit statt instabiler Ru
 Die ausgewählte Dichte bezeichnet die globale Referenzauflösung aus #77. Regional und Lokal
 erhöhen die geometrische Frequenz darüber hinaus. Für Frequenz `f` gilt `10 × f² + 2` Zellen.
 
-| Dichte     |      Global |    Regional |        Lokal |           Regional ein/aus | Lokal ein/aus |         max. aktive Zellen | Draw Calls | Zielbudget Generierung |
-| ---------- | ----------: | ----------: | -----------: | -------------------------: | ------------: | -------------------------: | ---------: | ---------------------: |
-| `low`      |    f4 / 162 |    f8 / 642 |  f16 / 2.562 |                 70 / 66 px |    70 / 52 px |                      2.562 |          1 |                  40 ms |
-| `standard` |    f8 / 642 | f16 / 2.562 | f32 / 10.242 |                 35 / 34 px |    55 / 40 px |                     10.242 |          1 |                  90 ms |
-| `high`     | f16 / 2.562 | f24 / 5.762 | f32 / 10.242 |                 18 / 17 px |    28 / 20 px |                     10.242 |          1 |                 180 ms |
-| `ultra`    |    f8 / 642 | f13 / 1.692 |  f21 / 4.412 | sieben Stufen aus ADR 0002 |             — | 15.360 aktiv / 16.384 max. |         33 |                 250 ms |
+| Dichte             |      Global |    Regional |        Lokal |           Regional ein/aus | Lokal ein/aus | max. aktive Zellen | Draw Calls | Zielbudget Generierung |
+| ------------------ | ----------: | ----------: | -----------: | -------------------------: | ------------: | -----------------: | ---------: | ---------------------: |
+| `low`              |    f4 / 162 |    f8 / 642 |  f16 / 2.562 |                 70 / 66 px |    70 / 52 px |              2.562 |          1 |                  40 ms |
+| `standard`         |    f8 / 642 | f16 / 2.562 | f32 / 10.242 |                 35 / 34 px |    55 / 40 px |             10.242 |          1 |                  90 ms |
+| `high`             | f16 / 2.562 | f24 / 5.762 | f32 / 10.242 |                 18 / 17 px |    28 / 20 px |             10.242 |          1 |                 180 ms |
+| `ultra` interaktiv |    f8 / 642 | f13 / 1.692 | f89 / 79.212 |  sechs vorbereitete Stufen |             — | 79.212 vollständig |          1 |                 250 ms |
+| `ultra`            |    f8 / 642 | f13 / 1.692 |  f21 / 4.412 | sieben Stufen aus ADR 0002 |             — |  79.212 interaktiv |          1 |                 250 ms |
 
-`ultra` ist ein opt-in Experiment. Zusätzlich zu den sicheren f16/f24/f32-
-Stufen adressiert die Detailstufe `f144 / 207.362` Zellen. Die f144-Geometrie
-wird in 32 lokalen Chunks mit je 480 Zellen vorab erzeugt; aktiv sind damit
-15.360 Zellen, das Desktopbudget erlaubt höchstens 16.384. Das Draw-Call-Budget
-von 33 entspricht ADR 0002: maximal 32 aktive Chunks plus gemeinsames Substrat.
-Zusätzliche Puffer für den späteren Globe-/Flat-Austausch und Rezentrierung
-aus ADR 0003 sind in #107 erneut zu vermessen.
+`ultra` ist ein opt-in Experiment. Beim Regenerieren werden die sechs interaktiven Stufen
+vorbereitet; der Ladefortschritt umfasst Daten- und Geometrieaufbau. Die feinste aktive Stufe
+ist `local / f89 / 79.212` und wird als vollständige Topologie gerendert. Dadurch entstehen beim
+Zoomen und Rotieren keine leeren Detail-Chunks. Die f144-Stufe bleibt für eine spätere, explizit
+aktivierte Variante reserviert, damit der normale Interaktionspfad nicht auf 207k Zellen anwächst.
 
 Die Werte vor und nach dem Schrägstrich sind Einschalt- und Ausschaltschwelle der Pixelhysterese,
 normiert auf eine Referenz-Viewporthöhe von 720 Pixeln. Dadurch liegen die Stufenwechsel auf

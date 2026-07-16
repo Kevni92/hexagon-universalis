@@ -57,6 +57,14 @@ describe('SevenLevelWorldLodRuntime', () => {
     expect(frame.estimatedActiveCells).toBeLessThan(worldLodCellCount(144));
   });
 
+  it('supports an interactive cap below the experimental detail level', () => {
+    const runtime = new SevenLevelWorldLodRuntime({ maxLevel: 'local' });
+    const frame = runtime.update(camera(1.01));
+
+    expect(frame.level.name).toBe('local');
+    expect(frame.level.frequency).toBe(89);
+  });
+
   it('derives projection-neutral chunk addresses around the focus point', () => {
     const detail = WORLD_LOD_LEVELS.find((level) => level.name === 'detail');
     expect(detail).toBeDefined();

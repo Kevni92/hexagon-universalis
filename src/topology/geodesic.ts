@@ -35,9 +35,9 @@ interface Triangle {
 
 const GOLDEN_RATIO = (1 + Math.sqrt(5)) / 2;
 const DEFAULT_FREQUENCY = 2;
-// Complete intermediate topology is still practical through f34. Higher
-// levels stay chunk-addressed and are never materialized as one sphere.
-const MAX_FREQUENCY = 34;
+// f89 is the highest complete topology used by the interactive ultra cap.
+// The f144 experiment remains chunk-addressed and is never materialized as one sphere.
+const MAX_FREQUENCY = 89;
 
 const ICOSAHEDRON_VERTICES: readonly Vector3[] = (
   [

@@ -18,6 +18,7 @@ export interface SevenLevelRuntimeConfig {
   readonly platform: WorldLodPlatform;
   readonly refineAbovePx: number;
   readonly coarsenBelowPx: number;
+  readonly maxLevel: WorldLodLevelName;
 }
 
 export interface SevenLevelRuntimeFrame {
@@ -33,6 +34,7 @@ const DEFAULT_RUNTIME_CONFIG: SevenLevelRuntimeConfig = {
   platform: 'desktop',
   refineAbovePx: 42,
   coarsenBelowPx: 28,
+  maxLevel: 'detail',
 };
 
 /**
@@ -78,7 +80,10 @@ export class SevenLevelWorldLodRuntime {
     let currentIndex = WORLD_LOD_LEVELS.findIndex((level) => level.name === this.activeLevelName);
     if (currentIndex < 0) currentIndex = 0;
 
-    while (currentIndex < WORLD_LOD_LEVELS.length - 1) {
+    const maximumIndex = WORLD_LOD_LEVELS.findIndex((level) => level.name === config.maxLevel);
+    const cappedIndex = maximumIndex < 0 ? WORLD_LOD_LEVELS.length - 1 : maximumIndex;
+
+    while (currentIndex < cappedIndex) {
       const current = WORLD_LOD_LEVELS[currentIndex]!;
       if (projectedMeanCellSizePx(current, camera) <= config.refineAbovePx) break;
       currentIndex += 1;

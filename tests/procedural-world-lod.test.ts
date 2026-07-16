@@ -55,14 +55,14 @@ describe('ProceduralWorldLod', () => {
     }
   });
 
-  it('materialisiert Ultra beim Zoomen ohne Frequenzen oberhalb des Geodesic-Limits', () => {
+  it('begrenzt Ultra beim Zoomen auf die interaktive f89-Stufe', () => {
     const world = new ProceduralWorldLod({ seed: 'ultra-zoom-regression', density: 'ultra' });
 
     expect(() => world.update(camera(2.8))).not.toThrow();
-    const detail = world.update(camera(1.2));
+    const local = world.update(camera(1.2));
 
-    expect(new Set(detail.map((unit) => unit.level))).toEqual(new Set([3]));
-    expect(cellsAtLevel(detail, 3)).toHaveLength(32 * 480);
+    expect(new Set(local.map((unit) => unit.level))).toEqual(new Set([2]));
+    expect(cellsAtLevel(local, 2)).toHaveLength(79_212);
   });
 
   it('materialisiert Zwischenstufen als vollständige Kugeltopologie statt als lokales Band', () => {
@@ -81,15 +81,15 @@ describe('ProceduralWorldLod', () => {
 
     expect(world.sourceCells).toHaveLength(10 * 21 ** 2 + 2);
     await world.prepare(camera(1.2));
-    const detail = world.update(camera(1.2));
-    const elevations = detail
+    const local = world.update(camera(1.2));
+    const elevations = local
       .flatMap((unit) =>
         unit.cells.map((_cell, index) => world.projectedCell(visibleCellId(unit, index))),
       )
       .filter((cell): cell is NonNullable<typeof cell> => cell !== undefined)
       .map((cell) => cell.elevation);
 
-    expect(new Set(detail.map((unit) => unit.worldLevel))).toEqual(new Set(['detail']));
+    expect(new Set(local.map((unit) => unit.worldLevel))).toEqual(new Set(['local']));
     expect(Math.max(...elevations) - Math.min(...elevations)).toBeGreaterThan(0.05);
   });
 
@@ -99,10 +99,23 @@ describe('ProceduralWorldLod', () => {
 
     await world.prepare(camera(1.2), (entry) => progress.push(entry));
 
-    expect(progress[0]).toEqual({ completed: 0, total: 32 });
-    expect(progress.at(-1)).toEqual({ completed: 32, total: 32 });
-    expect(world.cacheStats.projectedCells).toBe(32 * 480);
-    expect(world.update(camera(1.2))).toHaveLength(32);
+    expect(progress[0]).toEqual({ completed: 0, total: 1 });
+    expect(progress.at(-1)).toEqual({ completed: 1, total: 1 });
+    expect(world.cacheStats.projectedCells).toBe(79_212);
+    expect(world.update(camera(1.2))).toHaveLength(1);
+  });
+
+  it('bereitet vor dem ersten Zoom alle interaktiven Ultra-Stufen vor', async () => {
+    const world = new ProceduralWorldLod({ seed: 'ultra-all-stages', density: 'ultra' });
+    const progress: Array<{ completed: number; total: number }> = [];
+
+    const prepared = await world.prepareAll(camera(1.2), (entry) => progress.push(entry));
+
+    expect(prepared).toHaveLength(6);
+    expect(progress.at(-1)).toEqual({ completed: 6, total: 6 });
+    expect(new Set(prepared.map((unit) => unit.worldLevel))).toEqual(
+      new Set(['global', 'continental', 'macroregional', 'regional', 'subregional', 'local']),
+    );
   });
 
   it('erreicht mit denselben Generatorparametern alle drei benannten Weltstufen', () => {

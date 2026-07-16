@@ -49,7 +49,7 @@ describe('createGeodesicTopology', () => {
     }
   });
 
-  it.each([0, -1, 1.5, 35, Number.NaN, Number.POSITIVE_INFINITY])(
+  it.each([0, -1, 1.5, 90, Number.NaN, Number.POSITIVE_INFINITY])(
     'rejects invalid frequency %s',
     (frequency) => {
       expect(() => createGeodesicTopology(frequency)).toThrow(RangeError);

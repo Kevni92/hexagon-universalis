@@ -352,19 +352,32 @@ test('ultra profile preloads detail chunks behind a progress overlay', async ({ 
   await page.getByRole('button', { name: 'Welt neu generieren' }).click();
 
   await expect(loading).toBeVisible();
-  await expect(progress).toHaveAttribute('max', '64');
+  await expect(progress).toHaveAttribute('max', '12');
   await expect(loading).toBeHidden({ timeout: 60_000 });
 
   const canvas = page.locator('canvas.viewport-canvas');
   await canvas.dispatchEvent('wheel', { deltaY: -400 });
-  const intermediateLevel = await canvas.getAttribute('data-lod-level');
-  expect(['macroregional', 'regional']).toContain(intermediateLevel);
-  await expect(canvas).toHaveAttribute(
-    'data-lod-finest-cell-count',
-    intermediateLevel === 'macroregional' ? '4412' : '11562',
+  const intermediateCellCounts: Record<string, string> = {
+    continental: '1692',
+    macroregional: '4412',
+    regional: '11562',
+    subregional: '30252',
+    local: '79212',
+  };
+  const intermediateStates = Object.entries(intermediateCellCounts).map(
+    ([level, count]) => `${level}:${count}`,
   );
-  await zoomUntilLod(canvas, 'detail', -400, 8);
-  await expect(canvas).toHaveAttribute('data-lod-finest-cell-count', '15360');
+  await expect
+    .poll(
+      async () =>
+        `${await canvas.getAttribute('data-lod-level')}:${await canvas.getAttribute('data-lod-finest-cell-count')}`,
+      { timeout: 15_000 },
+    )
+    .toMatch(new RegExp(`^(${intermediateStates.join('|')})$`));
+  await zoomUntilLod(canvas, 'local', -400, 8);
+  await expect
+    .poll(() => canvas.getAttribute('data-lod-finest-cell-count'), { timeout: 60_000 })
+    .toBe('79212');
 
   const box = await canvas.boundingBox();
   expect(box).not.toBeNull();
@@ -373,8 +386,8 @@ test('ultra profile preloads detail chunks behind a progress overlay', async ({ 
     await page.mouse.down();
     await page.mouse.move(box.x + box.width * 0.78, box.y + box.height * 0.5, { steps: 8 });
     await page.mouse.up();
-    await expect(canvas).toHaveAttribute('data-lod-level', 'detail');
-    await expect(canvas).toHaveAttribute('data-lod-finest-cell-count', '15360');
+    await expect(canvas).toHaveAttribute('data-lod-level', 'local');
+    await expect(canvas).toHaveAttribute('data-lod-finest-cell-count', '79212');
     await expect
       .poll(async () => Number(await canvas.getAttribute('data-render-draw-calls')))
       .toBeGreaterThan(0);
