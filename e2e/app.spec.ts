@@ -4,7 +4,7 @@ import { expect, test, type Locator } from '@playwright/test';
 // konkurrieren in CI um denselben GPU-Prozess und verfälschen LOD-Zeitlimits.
 test.describe.configure({ mode: 'serial' });
 
-type ProceduralLod = 'global' | 'regional' | 'local';
+type ProceduralLod = 'global' | 'regional' | 'local' | 'detail';
 
 async function zoomUntilLod(
   canvas: Locator,
@@ -334,5 +334,29 @@ test('procedural controls reproduce seeds, validate density and stay inside the 
 
   await page.goto('/');
   await expect(page.getByTestId('procedural-controls')).toHaveCount(0);
+  expect(pageErrors).toEqual([]);
+});
+
+test('ultra profile preloads detail chunks behind a progress overlay', async ({ page }) => {
+  test.slow();
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+  await page.goto('/?world=procedural&seed=ultra-e2e&density=standard');
+
+  const loading = page.getByTestId('procedural-loading');
+  const progress = page.getByTestId('procedural-loading-progress');
+  await expect(loading).toBeHidden();
+
+  await page.getByLabel('Hex-Dichte').selectOption('ultra');
+  await page.getByLabel('Seed').fill('ultra-preloaded-e2e');
+  await page.getByRole('button', { name: 'Welt neu generieren' }).click();
+
+  await expect(loading).toBeVisible();
+  await expect(progress).toHaveAttribute('max', '64');
+  await expect(loading).toBeHidden({ timeout: 60_000 });
+
+  const canvas = page.locator('canvas.viewport-canvas');
+  await zoomUntilLod(canvas, 'detail', -400, 8);
+  await expect(canvas).toHaveAttribute('data-lod-finest-cell-count', '15360');
   expect(pageErrors).toEqual([]);
 });

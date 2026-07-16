@@ -40,7 +40,7 @@ export function createLodFocusDiagnostics(
     localParentIds.add(`${match[1]}:${match[2]}`);
   }
 
-  const finestLevel = units.reduce<0 | 1 | 2>(
+  const finestLevel = units.reduce<0 | 1 | 2 | 3>(
     (maximum, unit) => (unit.level > maximum ? unit.level : maximum),
     0,
   );

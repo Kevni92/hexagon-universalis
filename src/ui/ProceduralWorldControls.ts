@@ -28,6 +28,7 @@ const LOD_LABELS: Readonly<Record<ProceduralWorldLodLevel, string>> = {
   global: 'Global',
   regional: 'Regional',
   local: 'Lokal',
+  detail: 'Detail',
 };
 
 export class ProceduralWorldControls {

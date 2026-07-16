@@ -4,7 +4,11 @@ import type { GeodesicCell, GeodesicTopology, Vector3 } from '@/topology/geodesi
 import { visibleCellId, type VisibleUnit } from '@/topology/lod/WorldLod';
 import { createCellGlobeGeometryData, type CellPodiumOptions } from './CellGlobe';
 
-export type ChunkSurfaceRadius = (position: Vector3, level: 0 | 1 | 2, cellId: string) => number;
+export type ChunkSurfaceRadius = (
+  position: Vector3,
+  level: 0 | 1 | 2 | 3,
+  cellId: string,
+) => number;
 
 export const LOD_TRANSITION_DURATION_SECONDS = 0.18;
 
@@ -30,6 +34,10 @@ export class ChunkRenderer {
     THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>
   >();
   private readonly cachedMeshesByKey = new Map<
+    string,
+    THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>
+  >();
+  private readonly preloadedMeshesByKey = new Map<
     string,
     THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>
   >();
@@ -108,10 +116,48 @@ export class ChunkRenderer {
     readonly geometryDisposals: number;
   } {
     return {
-      cachedMeshes: this.cachedMeshesByKey.size,
+      cachedMeshes: this.cachedMeshesByKey.size + this.preloadedMeshesByKey.size,
       geometryBuilds: this.geometryBuildCount,
       geometryDisposals: this.geometryDisposeCount,
     };
+  }
+
+  /** Baut Meshes in kleinen Schritten vorab auf, ohne sie sichtbar zu machen. */
+  public async preload(
+    units: readonly VisibleUnit[],
+    onProgress?: (progress: { readonly completed: number; readonly total: number }) => void,
+  ): Promise<void> {
+    if (this.disposed) throw new Error('ChunkRenderer wurde bereits disposed.');
+    const total = units.length;
+    onProgress?.({ completed: 0, total });
+    for (const [index, unit] of units.entries()) {
+      const signature = this.unitSignature(unit);
+      const active = this.meshesByKey.get(unit.key);
+      const cached = this.cachedMeshesByKey.get(unit.key);
+      const preloaded = this.preloadedMeshesByKey.get(unit.key);
+      if (
+        active?.userData.unitSignature === signature ||
+        cached?.userData.unitSignature === signature ||
+        preloaded?.userData.unitSignature === signature
+      ) {
+        onProgress?.({ completed: index + 1, total });
+        await yieldToBrowser();
+        continue;
+      }
+      if (preloaded !== undefined) {
+        this.preloadedMeshesByKey.delete(unit.key);
+        this.disposeMesh(preloaded);
+      }
+      if (cached !== undefined) {
+        this.cachedMeshesByKey.delete(unit.key);
+        this.disposeMesh(cached);
+      }
+      const mesh = this.buildMesh(unit, signature);
+      mesh.visible = false;
+      this.preloadedMeshesByKey.set(unit.key, mesh);
+      onProgress?.({ completed: index + 1, total });
+      await yieldToBrowser();
+    }
   }
 
   /**
@@ -152,6 +198,21 @@ export class ChunkRenderer {
       if (cached !== undefined) {
         this.cachedMeshesByKey.delete(unit.key);
         this.disposeMesh(cached);
+      }
+      const preloaded = this.preloadedMeshesByKey.get(unit.key);
+      if (preloaded?.userData.unitSignature === signature) {
+        this.preloadedMeshesByKey.delete(unit.key);
+        this.transitions.delete(preloaded);
+        preloaded.visible = true;
+        preloaded.material.opacity = 1;
+        preloaded.material.transparent = false;
+        this.meshesByKey.set(unit.key, preloaded);
+        this.group.add(preloaded);
+        continue;
+      }
+      if (preloaded !== undefined) {
+        this.preloadedMeshesByKey.delete(unit.key);
+        this.disposeMesh(preloaded);
       }
       const mesh = this.buildMesh(unit, signature);
       this.meshesByKey.set(unit.key, mesh);
@@ -194,10 +255,12 @@ export class ChunkRenderer {
     this.cellColors = colors;
     for (const mesh of this.meshesByKey.values()) this.disposeMesh(mesh);
     for (const mesh of this.cachedMeshesByKey.values()) this.disposeMesh(mesh);
+    for (const mesh of this.preloadedMeshesByKey.values()) this.disposeMesh(mesh);
     for (const mesh of this.transitions.keys()) this.disposeMesh(mesh);
     this.transitions.clear();
     this.meshesByKey.clear();
     this.cachedMeshesByKey.clear();
+    this.preloadedMeshesByKey.clear();
     this.update(units);
   }
 
@@ -208,8 +271,10 @@ export class ChunkRenderer {
     this.transitions.clear();
     for (const mesh of this.meshesByKey.values()) this.disposeMesh(mesh);
     for (const mesh of this.cachedMeshesByKey.values()) this.disposeMesh(mesh);
+    for (const mesh of this.preloadedMeshesByKey.values()) this.disposeMesh(mesh);
     this.meshesByKey.clear();
     this.cachedMeshesByKey.clear();
+    this.preloadedMeshesByKey.clear();
     if (this.substrateMesh !== null) this.disposeMesh(this.substrateMesh);
     this.group.clear();
   }
@@ -219,9 +284,12 @@ export class ChunkRenderer {
     signature: string,
   ): THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial> {
     const topology = unitToTopology(unit);
-    const surfaceRadius = this.surfaceRadius;
+    // Ultra uses a tangent-plane detail sheet. Relief is still represented by
+    // the tile colors/details, while a shared radius keeps adjacent cells
+    // watertight instead of opening holes where neighboring elevations differ.
+    const surfaceRadius = unit.level === 3 ? undefined : this.surfaceRadius;
     const podiumOptions: CellPodiumOptions | undefined =
-      surfaceRadius === undefined
+      surfaceRadius === undefined || unit.level === 3
         ? undefined
         : {
             baseRadius: this.radius * PODIUM_BASE_RADIUS_FACTOR,
@@ -231,7 +299,9 @@ export class ChunkRenderer {
       topology,
       this.radius + unit.level * 0.003,
       this.cellColors,
-      surfaceRadius === undefined && unit.level === 2 ? 'tangent-plane' : 'spherical',
+      (surfaceRadius === undefined && unit.level >= 2) || unit.level === 3
+        ? 'tangent-plane'
+        : 'spherical',
       surfaceRadius === undefined
         ? undefined
         : (position, cellId) => surfaceRadius(position, unit.level, cellId),
@@ -250,7 +320,7 @@ export class ChunkRenderer {
       flatShading: false,
       roughness: 0.72,
       metalness: 0.08,
-      side: THREE.FrontSide,
+      side: unit.level === 3 ? THREE.DoubleSide : THREE.FrontSide,
       vertexColors: this.cellColors !== undefined,
     });
 
@@ -381,6 +451,10 @@ interface Transition {
 
 function smoothstep(value: number): number {
   return value * value * (3 - 2 * value);
+}
+
+function yieldToBrowser(): Promise<void> {
+  return new Promise((resolve) => globalThis.setTimeout(resolve, 0));
 }
 
 function unitToTopology(unit: VisibleUnit): GeodesicTopology {

@@ -2,7 +2,21 @@ import { TILE_PROFILES, type TileModifier, type TileType } from '@/data/tileCata
 import type { Vector3 } from '@/topology/geodesic';
 import { visibleCellId, type VisibleUnit } from '@/topology/lod/WorldLod';
 import type { QualityProfile } from '@/topology/lod/profiles';
-import type { CameraState } from '@/topology/lod/selection';
+import { cameraFocusDirection, type CameraState } from '@/topology/lod/selection';
+import {
+  selectActiveChunkAddresses,
+  SevenLevelWorldLodRuntime,
+} from '@/topology/lod/sevenLevelRuntime';
+import {
+  WORLD_LOD_LEVELS,
+  WORLD_LOD_PLATFORM_BUDGETS,
+} from '@/topology/lod/sevenLevelArchitecture';
+import {
+  ULTRA_DETAIL_CELL_COUNT,
+  ULTRA_DETAIL_MAX_ACTIVE_CHUNKS,
+  UltraDetailChunkCache,
+  type UltraDetailProgress,
+} from '@/topology/lod/ultraDetail';
 import {
   createProceduralWorld,
   normalizeProceduralWorldConfig,
@@ -14,13 +28,15 @@ import {
 } from './proceduralWorld';
 import { ProceduralWorldLodController } from './proceduralWorldLodController';
 
-export type ProceduralWorldLodLevel = 'global' | 'regional' | 'local';
+export type ProceduralWorldLodLevel = 'global' | 'regional' | 'local' | 'detail';
 export type ProceduralCellColor = (cell: ProceduralWorldCell) => string;
 
 export interface ProceduralLodBudgetProfile {
   readonly density: ProceduralDensityProfileId;
   readonly quality: QualityProfile;
-  readonly levelCellCounts: Readonly<Record<ProceduralWorldLodLevel, number>>;
+  readonly levelCellCounts: Readonly<
+    Record<'global' | 'regional' | 'local', number> & { readonly detail?: number }
+  >;
   readonly maxActiveCells: number;
   readonly maxDrawCalls: number;
   readonly generationBudgetMs: number;
@@ -91,9 +107,14 @@ export const PROCEDURAL_LOD_PROFILES: Readonly<
         local: level(32, 28, 20, 1),
       },
     },
-    levelCellCounts: { global: 2562, regional: 5762, local: 10242 },
-    maxActiveCells: 10242,
-    maxDrawCalls: 1,
+    levelCellCounts: {
+      global: 2562,
+      regional: 5762,
+      local: 10242,
+      detail: ULTRA_DETAIL_CELL_COUNT,
+    },
+    maxActiveCells: 16_384,
+    maxDrawCalls: ULTRA_DETAIL_MAX_ACTIVE_CHUNKS + 1,
     generationBudgetMs: 250,
   },
 };
@@ -132,6 +153,10 @@ export class ProceduralWorldLod {
   private controller: ProceduralWorldLodController;
   private readonly projectedById = new Map<string, ProceduralLodCell>();
   private readonly colorsById = new Map<string, string>();
+  private readonly ultraDetailCache = new UltraDetailChunkCache();
+  private ultraRuntime: SevenLevelWorldLodRuntime | null = null;
+  private activeLevelValue: ProceduralWorldLodLevel = 'global';
+  private activeFrequencyValue = 0;
   private generation = 1;
   private disposed = false;
 
@@ -142,6 +167,15 @@ export class ProceduralWorldLod {
     this.configValue = normalizeProceduralWorldConfig(config);
     this.referenceWorld = createProceduralWorld(this.configValue);
     this.controller = new ProceduralWorldLodController(this.profile.quality);
+    this.ultraRuntime =
+      this.configValue.density === 'ultra'
+        ? new SevenLevelWorldLodRuntime({
+            platform: 'desktop',
+            refineAbovePx: 18,
+            coarsenBelowPx: 12,
+          })
+        : null;
+    this.activeFrequencyValue = this.profile.quality.levels.global.frequency;
   }
 
   public get config(): ProceduralWorldConfig {
@@ -160,6 +194,14 @@ export class ProceduralWorldLod {
     return this.referenceWorld.cells;
   }
 
+  public get activeLevel(): ProceduralWorldLodLevel {
+    return this.activeLevelValue;
+  }
+
+  public get activeFrequency(): number {
+    return this.activeFrequencyValue;
+  }
+
   public get cellColors(): ReadonlyMap<string, string> {
     return this.colorsById;
   }
@@ -175,7 +217,30 @@ export class ProceduralWorldLod {
 
   public update(camera: CameraState): readonly VisibleUnit[] {
     this.assertActive();
-    const units = this.controller.update(camera);
+    let units: readonly VisibleUnit[];
+    if (this.ultraRuntime !== null) {
+      const frame = this.ultraRuntime.update(camera);
+      this.activeLevelValue = mapUltraLevel(frame.level.name);
+      this.activeFrequencyValue =
+        this.activeLevelValue === 'detail'
+          ? frame.level.frequency
+          : this.profile.quality.levels[this.activeLevelValue].frequency;
+      units =
+        frame.level.name === 'detail'
+          ? this.ultraDetailCache.units(frame.activeChunks, cameraFocusDirection(camera))
+          : this.controller.update(camera);
+    } else {
+      units = this.controller.update(camera);
+      const maximumLevel = Math.min(2, Math.max(...units.map((unit) => unit.level)));
+      this.activeLevelValue = levelName(maximumLevel as 0 | 1 | 2);
+      const qualityLevel = this.activeLevelValue === 'detail' ? 'local' : this.activeLevelValue;
+      this.activeFrequencyValue = this.profile.quality.levels[qualityLevel].frequency;
+    }
+    this.projectUnits(units);
+    return units;
+  }
+
+  private projectUnits(units: readonly VisibleUnit[]): void {
     for (const unit of units) {
       for (const [index, lodCell] of unit.cells.entries()) {
         const id = visibleCellId(unit, index);
@@ -198,7 +263,29 @@ export class ProceduralWorldLod {
         this.colorsById.set(id, this.colorForCell(source));
       }
     }
-    return units;
+  }
+
+  public async prepare(
+    camera: CameraState,
+    onProgress?: (progress: UltraDetailProgress) => void,
+  ): Promise<readonly VisibleUnit[]> {
+    this.assertActive();
+    if (this.configValue.density !== 'ultra' || this.ultraRuntime === null) {
+      onProgress?.({ completed: 1, total: 1 });
+      await yieldToBrowser();
+      return [];
+    }
+
+    const detailLevel = WORLD_LOD_LEVELS[WORLD_LOD_LEVELS.length - 1]!;
+    const addresses = selectActiveChunkAddresses(
+      detailLevel,
+      camera,
+      WORLD_LOD_PLATFORM_BUDGETS.desktop,
+    );
+    await this.ultraDetailCache.warm(addresses, cameraFocusDirection(camera), onProgress, (unit) =>
+      this.projectUnits([unit]),
+    );
+    return this.ultraDetailCache.units(addresses, cameraFocusDirection(camera));
   }
 
   public projectedCell(cellId: string): ProceduralLodCell | undefined {
@@ -228,8 +315,21 @@ export class ProceduralWorldLod {
     this.referenceWorld = nextReferenceWorld;
     this.projectedById.clear();
     this.colorsById.clear();
+    this.ultraDetailCache.clear();
     this.generation += 1;
-    if (densityChanged) this.controller = new ProceduralWorldLodController(this.profile.quality);
+    if (densityChanged) {
+      this.controller = new ProceduralWorldLodController(this.profile.quality);
+      this.ultraRuntime =
+        next.density === 'ultra'
+          ? new SevenLevelWorldLodRuntime({
+              platform: 'desktop',
+              refineAbovePx: 18,
+              coarsenBelowPx: 12,
+            })
+          : null;
+    }
+    this.activeLevelValue = 'global';
+    this.activeFrequencyValue = this.profile.quality.levels.global.frequency;
   }
 
   public dispose(): void {
@@ -238,6 +338,7 @@ export class ProceduralWorldLod {
     this.controller.reset();
     this.projectedById.clear();
     this.colorsById.clear();
+    this.ultraDetailCache.clear();
   }
 
   private assertActive(): void {
@@ -255,13 +356,18 @@ export function validateProceduralLodProfiles(): void {
       PROCEDURAL_DENSITY_PROFILES[density as ProceduralDensityProfileId].cellCount
     )
       throw new RangeError(`Globale Zellzahl passt nicht zum Dichteprofil ${density}.`);
-    const finestLevel = profile.levelCellCounts.local;
-    const expectedActiveCells = Math.max(...Object.values(profile.levelCellCounts));
+    const finestLevel = density === 'ultra' ? 10_242 : profile.levelCellCounts.local;
+    const expectedActiveCells =
+      density === 'ultra'
+        ? profile.maxActiveCells
+        : Math.max(...Object.values(profile.levelCellCounts));
     if (profile.maxActiveCells !== expectedActiveCells)
       throw new RangeError(`Ungültiges aktives Zellbudget für ${density}.`);
-    if (profile.maxDrawCalls !== 1)
+    if (density !== 'ultra' && profile.maxDrawCalls !== 1)
       throw new RangeError(`Ungültiges Draw-Call-Budget für ${density}.`);
     if (finestLevel > 10_242) throw new RangeError(`Ungültiges Laufzeitbudget für ${density}.`);
+    if (density === 'ultra' && profile.levelCellCounts.detail !== ULTRA_DETAIL_CELL_COUNT)
+      throw new RangeError('Ultra muss die f144-Adressierungszellzahl verwenden.');
   }
 }
 
@@ -288,12 +394,28 @@ function nearestWorldCell(
   return nearest;
 }
 
-function levelName(level: 0 | 1 | 2): ProceduralWorldLodLevel {
-  return (['global', 'regional', 'local'] as const)[level];
+function levelName(level: 0 | 1 | 2 | 3): ProceduralWorldLodLevel {
+  if (level === 3) return 'detail';
+  if (level === 2) return 'local';
+  if (level === 1) return 'regional';
+  return 'global';
+}
+
+function mapUltraLevel(
+  level: import('@/topology/lod/sevenLevelArchitecture').WorldLodLevelName,
+): ProceduralWorldLodLevel {
+  if (level === 'detail') return 'detail';
+  if (level === 'local') return 'local';
+  if (level === 'global') return 'global';
+  return 'regional';
 }
 
 function dot(first: Vector3, second: Vector3): number {
   return first.x * second.x + first.y * second.y + first.z * second.z;
+}
+
+function yieldToBrowser(): Promise<void> {
+  return new Promise((resolve) => globalThis.setTimeout(resolve, 0));
 }
 
 validateProceduralLodProfiles();

@@ -25,7 +25,7 @@ import {
  */
 export interface VisibleUnit {
   readonly key: string;
-  readonly level: 0 | 1 | 2;
+  readonly level: 0 | 1 | 2 | 3;
   readonly cells: readonly LodCell[];
   /** Optional voll qualifizierte IDs, wenn die lokale Elternkette mehr als einen Index umfasst. */
   readonly cellIds?: readonly string[];

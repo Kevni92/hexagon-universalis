@@ -37,15 +37,18 @@ describe('ProceduralWorldLod', () => {
       global: 2562,
       regional: 5762,
       local: 10242,
+      detail: 207362,
     });
-    expect(PROCEDURAL_LOD_PROFILES.ultra.maxActiveCells).toBe(10242);
-    expect(PROCEDURAL_LOD_PROFILES.ultra.maxDrawCalls).toBe(1);
+    expect(PROCEDURAL_LOD_PROFILES.ultra.maxActiveCells).toBe(16384);
+    expect(PROCEDURAL_LOD_PROFILES.ultra.maxDrawCalls).toBe(33);
 
     for (const profile of Object.values(PROCEDURAL_LOD_PROFILES)) {
       const { global, regional, local } = profile.quality.levels;
       expect(global.frequency).toBeLessThan(regional.frequency);
       expect(regional.frequency).toBeLessThan(local.frequency);
-      expect(profile.maxActiveCells).toBeLessThanOrEqual(profile.levelCellCounts.local);
+      expect(profile.maxActiveCells).toBeLessThanOrEqual(
+        profile.levelCellCounts.detail ?? profile.levelCellCounts.local,
+      );
     }
   });
 
@@ -53,10 +56,22 @@ describe('ProceduralWorldLod', () => {
     const world = new ProceduralWorldLod({ seed: 'ultra-zoom-regression', density: 'ultra' });
 
     expect(() => world.update(camera(2.8))).not.toThrow();
-    const local = world.update(camera(1.2));
+    const detail = world.update(camera(1.2));
 
-    expect(new Set(local.map((unit) => unit.level))).toEqual(new Set([2]));
-    expect(cellsAtLevel(local, 2)).toHaveLength(10242);
+    expect(new Set(detail.map((unit) => unit.level))).toEqual(new Set([3]));
+    expect(cellsAtLevel(detail, 3)).toHaveLength(32 * 480);
+  });
+
+  it('bereitet Ultra-Detail-Chunks vor dem Zoom mit Fortschritt vor', async () => {
+    const world = new ProceduralWorldLod({ seed: 'ultra-preload', density: 'ultra' });
+    const progress: Array<{ completed: number; total: number }> = [];
+
+    await world.prepare(camera(1.2), (entry) => progress.push(entry));
+
+    expect(progress[0]).toEqual({ completed: 0, total: 32 });
+    expect(progress.at(-1)).toEqual({ completed: 32, total: 32 });
+    expect(world.cacheStats.projectedCells).toBe(32 * 480);
+    expect(world.update(camera(1.2))).toHaveLength(32);
   });
 
   it('erreicht mit denselben Generatorparametern alle drei benannten Weltstufen', () => {
@@ -220,11 +235,11 @@ describe('ProceduralWorldLod', () => {
   });
 });
 
-function cellsAtLevel(units: readonly VisibleUnit[], level: 0 | 1 | 2) {
+function cellsAtLevel(units: readonly VisibleUnit[], level: 0 | 1 | 2 | 3) {
   return units.filter((unit) => unit.level === level).flatMap((unit) => unit.cells);
 }
 
-function meanRadius(units: readonly VisibleUnit[], level: 0 | 1 | 2): number {
+function meanRadius(units: readonly VisibleUnit[], level: 0 | 1 | 2 | 3): number {
   const cells = cellsAtLevel(units, level);
   return cells.reduce((sum, cell) => sum + estimateCellRadius(cell.cell), 0) / cells.length;
 }

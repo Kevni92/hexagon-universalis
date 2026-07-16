@@ -30,7 +30,7 @@ export const MAX_RENDER_FPS = 60;
 const FRAME_INTERVAL_MS = 1000 / MAX_RENDER_FPS;
 const CAMERA = { fov: 45, near: 0.1, far: 100, z: 3.4 } as const;
 const SHOWCASE_TOPOLOGY_FREQUENCY = 2;
-const PROCEDURAL_LEVELS = ['global', 'regional', 'local'] as const;
+const PROCEDURAL_LEVELS = ['global', 'regional', 'local', 'detail'] as const;
 
 export type WorldMode = 'earth' | 'demo' | 'lod' | 'procedural';
 
@@ -49,6 +49,14 @@ export interface ProceduralRendererState {
 export interface ProceduralRendererOptions {
   readonly config?: Partial<ProceduralWorldConfig>;
   readonly onStateChange?: (state: ProceduralRendererState) => void;
+  readonly onProceduralProgress?: (progress: ProceduralProgress) => void;
+}
+
+export interface ProceduralProgress {
+  readonly phase: 'preparing' | 'ready' | 'error';
+  readonly completed: number;
+  readonly total: number;
+  readonly message: string;
 }
 
 export interface ProceduralRuntimeStats {
@@ -210,9 +218,7 @@ export class SceneRenderer {
   }
 
   public get activeResolutionLevel(): ProceduralWorldLodLevel | null {
-    if (this.proceduralWorldLod === null || this.visibleUnits.length === 0) return null;
-    const depth = Math.max(...this.visibleUnits.map((unit) => unit.level));
-    return PROCEDURAL_LEVELS[depth] ?? null;
+    return this.proceduralWorldLod?.activeLevel ?? null;
   }
 
   public get proceduralRuntimeStats(): ProceduralRuntimeStats | null {
@@ -246,8 +252,8 @@ export class SceneRenderer {
       config: this.proceduralWorldLod.config,
       fingerprint: this.proceduralWorldLod.fingerprint,
       lodLevel,
-      frequency: profile.quality.levels[lodLevel].frequency,
-      cellCount: profile.levelCellCounts[lodLevel],
+      frequency: this.proceduralWorldLod.activeFrequency,
+      cellCount: profile.levelCellCounts[lodLevel] ?? profile.levelCellCounts.local,
     };
   }
 
@@ -263,14 +269,67 @@ export class SceneRenderer {
       if (current === null) throw new Error('Die prozedurale Testwelt ist nicht aktiv.');
       return current;
     }
-
-    this.proceduralWorldLod.reconfigure(config);
-    this.updateLod();
-    this.chunkRenderer.setCellColors(this.proceduralWorldLod.cellColors, this.visibleUnits);
-    this.publishProceduralWorkDiagnostics();
-    const next = this.proceduralState;
-    if (next === null) throw new Error('Die prozedurale Testwelt ist nicht aktiv.');
-    return next;
+    const targetIsUltra = (config.density ?? this.proceduralWorldLod.config.density) === 'ultra';
+    const progressTotal = targetIsUltra ? 64 : 1;
+    this.proceduralOptions.onProceduralProgress?.({
+      phase: 'preparing',
+      completed: 0,
+      total: progressTotal,
+      message: 'Welt wird vorbereitet …',
+    });
+    try {
+      this.proceduralWorldLod.reconfigure(config);
+      const preparedUnits = await this.proceduralWorldLod.prepare(
+        this.currentCameraState(),
+        (progress) => {
+          this.proceduralOptions.onProceduralProgress?.({
+            phase: 'preparing',
+            completed: progress.completed,
+            total: progressTotal,
+            message:
+              progress.total > 1
+                ? `Ultra-Detail wird vorbereitet … ${progress.completed}/${progress.total} Chunks`
+                : 'Welt wird vorbereitet …',
+          });
+        },
+      );
+      this.updateLod();
+      this.chunkRenderer.setCellColors(this.proceduralWorldLod.cellColors, this.visibleUnits);
+      if (preparedUnits.length > 0 && this.proceduralDetails !== null) {
+        this.proceduralDetails.update(
+          preparedUnits,
+          (cellId) => this.proceduralWorldLod?.projectedCell(cellId),
+          this.proceduralWorldLod.fingerprint,
+        );
+        this.proceduralDetails.group.visible = false;
+        await this.chunkRenderer.preload(preparedUnits, (progress) => {
+          this.proceduralOptions.onProceduralProgress?.({
+            phase: 'preparing',
+            completed: preparedUnits.length + progress.completed,
+            total: progressTotal,
+            message: `Detail-Geometrie wird vorbereitet … ${progress.completed}/${progress.total} Chunks`,
+          });
+        });
+      }
+      this.publishProceduralWorkDiagnostics();
+      const next = this.proceduralState;
+      if (next === null) throw new Error('Die prozedurale Testwelt ist nicht aktiv.');
+      this.proceduralOptions.onProceduralProgress?.({
+        phase: 'ready',
+        completed: progressTotal,
+        total: progressTotal,
+        message: 'Welt bereit',
+      });
+      return next;
+    } catch (error) {
+      this.proceduralOptions.onProceduralProgress?.({
+        phase: 'error',
+        completed: 0,
+        total: progressTotal,
+        message: error instanceof Error ? error.message : 'Die Welt konnte nicht generiert werden.',
+      });
+      throw error;
+    }
   }
 
   public start(): void {
@@ -360,15 +419,7 @@ export class SceneRenderer {
     if (inputKey === this.lastLodInputKey) return;
     this.lastLodInputKey = inputKey;
     this.lodUpdateCount += 1;
-    const cameraState = computeLocalCameraState({
-      worldQuaternion: this.world.quaternion,
-      cameraPosition: this.camera.position,
-      cameraQuaternion: this.camera.quaternion,
-      fovDegrees: this.camera.fov,
-      aspect: this.camera.aspect,
-      viewportHeight: this.container.clientHeight || 1,
-      sphereRadius: 1,
-    });
+    const cameraState = this.currentCameraState();
 
     this.visibleUnits =
       this.proceduralWorldLod?.update(cameraState) ?? this.worldLod?.update(cameraState) ?? [];
@@ -434,6 +485,18 @@ export class SceneRenderer {
       this.world.quaternion.z,
       this.world.quaternion.w,
     ]);
+  }
+
+  private currentCameraState(): ReturnType<typeof computeLocalCameraState> {
+    return computeLocalCameraState({
+      worldQuaternion: this.world.quaternion,
+      cameraPosition: this.camera.position,
+      cameraQuaternion: this.camera.quaternion,
+      fovDegrees: this.camera.fov,
+      aspect: this.camera.aspect,
+      viewportHeight: this.container.clientHeight || 1,
+      sphereRadius: 1,
+    });
   }
 
   private publishProceduralWorkDiagnostics(): void {
