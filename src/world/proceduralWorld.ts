@@ -8,6 +8,7 @@ import {
 import { createSeededNoise3D, hashText } from './seededNoise';
 import { ContinentalStructure, type ContinentalStructureDiagnostics } from './continentalStructure';
 import { MountainStructure, type MountainStructureDiagnostics } from './mountainStructure';
+import { deriveHydrology, type ProceduralLake, type ProceduralWaterFeature } from './hydrology';
 
 export const PROCEDURAL_WORLD_FORMAT_VERSION = 1 as const;
 export const PROCEDURAL_WORLD_GENERATOR_VERSION = '1.1.0';
@@ -74,6 +75,13 @@ export interface ProceduralWorldCell {
   readonly isInlandBasin: boolean;
   readonly mountainRangeId: string | null;
   readonly mountainInfluence: number;
+  readonly flowToCellId: string | null;
+  readonly catchmentId: string | null;
+  readonly flowAccumulation: number;
+  readonly waterFeature: ProceduralWaterFeature;
+  readonly lakeId: string | null;
+  readonly lakeLevel: number | null;
+  readonly isLakeOutlet: boolean;
 }
 
 export interface ProceduralWorld {
@@ -85,6 +93,7 @@ export interface ProceduralWorld {
   readonly fingerprint: string;
   readonly macroStructure: ContinentalStructureDiagnostics;
   readonly mountainStructure: MountainStructureDiagnostics;
+  readonly lakes: readonly ProceduralLake[];
   readonly cells: readonly ProceduralWorldCell[];
 }
 
@@ -202,15 +211,40 @@ function buildProceduralWorld(
   });
   const surfacesById = new Map(classified.map((cell) => [cell.cellId, cell.surface]));
   const cells = classified.map((cell) => classifyCell(cell, surfacesById));
+  const hydrology = deriveHydrology(
+    normalized.seed,
+    cells.map((cell) => ({
+      cellId: cell.cellId,
+      center: cell.center,
+      neighborIds: cell.neighborIds,
+      elevation: cell.elevation,
+      surface: cell.surface,
+      macroRegion: cell.macroRegion,
+      isInlandBasin: cell.isInlandBasin,
+    })),
+  );
+  const hydrologicCells = cells.map((cell) => ({
+    ...cell,
+    ...(hydrology.cells.get(cell.cellId) ?? {
+      flowToCellId: null,
+      catchmentId: null,
+      flowAccumulation: 0,
+      waterFeature: 'ocean' as const,
+      lakeId: null,
+      lakeLevel: null,
+      isLakeOutlet: false,
+    }),
+  }));
   const worldWithoutFingerprint = {
     formatVersion: PROCEDURAL_WORLD_FORMAT_VERSION,
     generatorVersion: PROCEDURAL_WORLD_GENERATOR_VERSION,
     config: normalized,
     frequency: topology.frequency,
-    cellCount: cells.length,
+    cellCount: hydrologicCells.length,
     macroStructure: macroStructure.diagnostics,
     mountainStructure: mountainStructure.diagnostics,
-    cells,
+    lakes: hydrology.lakes,
+    cells: hydrologicCells,
   };
   return {
     ...worldWithoutFingerprint,
@@ -348,10 +382,21 @@ function createRawFields(
     });
 }
 
+type BaseProceduralWorldCell = Omit<
+  ProceduralWorldCell,
+  | 'flowToCellId'
+  | 'catchmentId'
+  | 'flowAccumulation'
+  | 'waterFeature'
+  | 'lakeId'
+  | 'lakeLevel'
+  | 'isLakeOutlet'
+>;
+
 function classifyCell(
   cell: ClassifiedCellFields,
   surfacesById: ReadonlyMap<string, ProceduralSurface>,
-): ProceduralWorldCell {
+): BaseProceduralWorldCell {
   const isCoast = cell.neighborIds.some(
     (neighborId) => surfacesById.get(neighborId) !== cell.surface,
   );
