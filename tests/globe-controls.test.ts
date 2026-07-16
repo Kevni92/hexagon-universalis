@@ -218,4 +218,31 @@ describe('GlobeControls', () => {
     expect(correctedTilt).toBeGreaterThan(0);
     controls.dispose();
   });
+
+  it('clamps close-up drag and inertia to the configured playable latitude', () => {
+    const { camera, controls, element } = createControls({
+      inertia: true,
+      minDistance: 1.2,
+      maxDistance: 3.4,
+      nearTilt: 0,
+    });
+    controls.setPlayableLatitudeBounds({
+      northRadians: THREE.MathUtils.degToRad(30),
+      southRadians: THREE.MathUtils.degToRad(30),
+    });
+    element.dispatch('pointerdown', {
+      pointerId: 1,
+      pointerType: 'mouse',
+      button: 0,
+      clientX: 0,
+      clientY: 0,
+    });
+    element.dispatch('pointermove', { pointerId: 1, clientX: 0, clientY: 10_000 });
+    element.dispatch('pointerup', { pointerId: 1 });
+    controls.update(0.1);
+
+    const latitude = Math.asin(camera.position.y / camera.position.length());
+    expect(latitude).toBeCloseTo(THREE.MathUtils.degToRad(30));
+    controls.dispose();
+  });
 });

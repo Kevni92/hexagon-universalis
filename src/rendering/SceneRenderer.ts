@@ -12,6 +12,10 @@ import {
   WorldLodProjectionController,
   type WorldLodSurfaceProjection,
 } from '@/topology/lod/projection';
+import {
+  PlayableLatitudeController,
+  type PlayableLatitudeConfig,
+} from '@/topology/lod/playableLatitude';
 import { WORLD_LOD_LEVELS } from '@/topology/lod/sevenLevelArchitecture';
 import { EarthChunkRuntime, type EarthRuntimeStatus } from '@/data/EarthChunkRuntime';
 import { EarthWorldModel } from '@/data/EarthWorldModel';
@@ -55,6 +59,7 @@ export interface ProceduralRendererState {
 
 export interface ProceduralRendererOptions {
   readonly config?: Partial<ProceduralWorldConfig>;
+  readonly playableLatitude?: Partial<PlayableLatitudeConfig>;
   readonly onStateChange?: (state: ProceduralRendererState) => void;
   readonly onProceduralProgress?: (progress: ProceduralProgress) => void;
 }
@@ -93,6 +98,7 @@ export class SceneRenderer {
   private readonly resizeObserver: ResizeObserver | null;
   private readonly earthRuntime: EarthChunkRuntime | null;
   private readonly projectionController = new WorldLodProjectionController();
+  private readonly playableLatitudeController: PlayableLatitudeController;
   private readonly earthModel = new EarthWorldModel();
   private visibleUnits: readonly import('@/topology/lod/WorldLod').VisibleUnit[] = [];
   private requestedDataKey = '';
@@ -114,6 +120,9 @@ export class SceneRenderer {
     onEarthStatus?: (status: EarthRuntimeStatus) => void,
     private readonly proceduralOptions: ProceduralRendererOptions = {},
   ) {
+    this.playableLatitudeController = new PlayableLatitudeController(
+      proceduralOptions.playableLatitude,
+    );
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -443,6 +452,11 @@ export class SceneRenderer {
     this.visibleUnits =
       this.proceduralWorldLod?.update(cameraState) ?? this.worldLod?.update(cameraState) ?? [];
     const activeLevel = this.activeResolutionLevel ?? 'global';
+    const focus = cameraFocusDirection(cameraState);
+    const latitudeState = this.playableLatitudeController.evaluate(
+      focus,
+      this.projectionController.current.mode === 'flat',
+    );
     const projectionState = this.projectionController.update({
       levelName: activeLevel,
       projectedCellSizePx: projectedCellSizeForLevel(
@@ -450,8 +464,12 @@ export class SceneRenderer {
         this.proceduralWorldLod?.activeFrequency,
         cameraState,
       ),
-      focus: cameraFocusDirection(cameraState),
+      focus,
+      flatAllowed: latitudeState.flatAllowed,
     });
+    this.controls.setPlayableLatitudeBounds(
+      projectionState.mode === 'flat' ? this.playableLatitudeController.boundsForFlat : null,
+    );
     const surfaceProjection: WorldLodSurfaceProjection | undefined =
       projectionState.mode === 'flat' && projectionState.frame !== null
         ? createFlatSurfaceProjection(projectionState.frame)
@@ -462,6 +480,11 @@ export class SceneRenderer {
     canvas.dataset.projectionGeneration = String(projectionState.generation);
     canvas.dataset.projectionReason = projectionState.reason;
     canvas.dataset.projectionCenter = formatVector(projectionState.frame?.center ?? null);
+    canvas.dataset.playableLatitude = latitudeState.latitudeDegrees.toFixed(3);
+    canvas.dataset.playableLatitudeLimit =
+      this.playableLatitudeController.maxLatitudeDegrees.toFixed(1);
+    canvas.dataset.playableLatitudeStatus =
+      latitudeState.boundary ?? (latitudeState.flatAllowed ? 'allowed' : 'hysteresis');
     if (this.proceduralWorldLod !== null) {
       const reliefScale = proceduralReliefScale(activeLevel);
       canvas.dataset.lodLevel = activeLevel;

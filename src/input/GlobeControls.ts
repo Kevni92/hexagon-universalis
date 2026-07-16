@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 
 import { clamp } from '@/shared/clamp';
+import type { PlayableLatitudeBounds } from '@/topology/lod/playableLatitude';
 
 export interface GlobeControlsOptions {
   rotateSpeed?: number;
@@ -50,6 +51,7 @@ export class GlobeControls {
   private pinchDistance: number | null = null;
   private activePointerId: number | null = null;
   private lastPointer: PointerPosition | null = null;
+  private playableLatitudeBounds: PlayableLatitudeBounds | null = null;
   private disposed = false;
 
   public constructor(
@@ -109,6 +111,12 @@ export class GlobeControls {
     const damping = Math.exp(-this.options.damping * seconds);
     this.velocityYaw *= damping;
     this.velocityPitch *= damping;
+  }
+
+  /** Aktiviert die Nahbereichsgrenze; null gibt die vollständige Kugel frei. */
+  public setPlayableLatitudeBounds(bounds: PlayableLatitudeBounds | null): void {
+    this.playableLatitudeBounds = bounds;
+    this.applyCameraFrame();
   }
 
   public dispose(): void {
@@ -245,7 +253,14 @@ export class GlobeControls {
       zoomProgress,
     );
     const automaticTilt = this.options.nearTilt * nearProgress;
-    const latitude = clamp(this.pitch + automaticTilt, -PITCH_LIMIT, PITCH_LIMIT);
+    const requestedLatitude = this.pitch + automaticTilt;
+    const latitude = this.clampPlayableLatitude(
+      clamp(requestedLatitude, -PITCH_LIMIT, PITCH_LIMIT),
+    );
+    if (latitude !== requestedLatitude) {
+      this.pitch = latitude - automaticTilt;
+      this.velocityPitch = 0;
+    }
     const cosLatitude = Math.cos(latitude);
     this.camera.position.set(
       distance * Math.sin(this.yaw) * cosLatitude,
@@ -254,6 +269,12 @@ export class GlobeControls {
     );
     this.camera.up?.set(0, 1, 0);
     this.camera.lookAt(0, 0, 0);
+  }
+
+  private clampPlayableLatitude(latitude: number): number {
+    const bounds = this.playableLatitudeBounds;
+    if (bounds === null) return latitude;
+    return clamp(latitude, -bounds.southRadians, bounds.northRadians);
   }
 
   private getPinchDistance(): number {
