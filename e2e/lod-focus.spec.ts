@@ -125,7 +125,12 @@ test('high-density Lokal-LOD hält stationäre, Rotations- und Zoombudgets ein',
   await canvas.evaluate(
     () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
   );
-  expect(await readWorkState(canvas)).toEqual(beforeRotation);
+  const afterRotation = await readWorkState(canvas);
+  expect(afterRotation.lodUpdates).toBeGreaterThan(beforeRotation.lodUpdates);
+  expect(afterRotation.geometryBuilds).toBeLessThanOrEqual(beforeRotation.geometryBuilds + 1);
+  expect(afterRotation.detailBuilds).toBeLessThanOrEqual(beforeRotation.detailBuilds + 1);
+  await page.waitForTimeout(250);
+  expect(await readWorkState(canvas)).toEqual(afterRotation);
 
   await testInfo.attach('issue-88-high-local-zoom-end', {
     body: await page.screenshot({ clip: box }),

@@ -4,6 +4,7 @@ import type { GeodesicCell, Vector3 } from '@/topology/geodesic';
 import type { LodCell } from '@/topology/lod/hierarchy';
 import { visibleCellId, type VisibleUnit } from '@/topology/lod/WorldLod';
 import type { ProceduralLodCell, ProceduralWorldLodLevel } from '@/world/proceduralWorldLod';
+import type { WorldLodSurfaceProjection } from '@/topology/lod/projection';
 
 import {
   createTileDetails,
@@ -180,6 +181,7 @@ export class ProceduralDetailRenderer {
     units: readonly VisibleUnit[],
     projectedCell: ProceduralCellLookup,
     worldFingerprint: string,
+    surfaceProjection?: WorldLodSurfaceProjection,
   ): void {
     if (this.disposed) throw new Error('ProceduralDetailRenderer wurde bereits disposed.');
     const localUnits = units.filter((unit) => {
@@ -200,7 +202,7 @@ export class ProceduralDetailRenderer {
         (unit) =>
           `${unit.key}:${unit.cells.map((_cell, index) => visibleCellId(unit, index)).join(',')}`,
       )
-      .join('|')}`;
+      .join('|')}:${surfaceProjection?.signature ?? 'globe'}`;
     if (nextSignature === this.signature) {
       this.group.visible = true;
       return;
@@ -219,7 +221,7 @@ export class ProceduralDetailRenderer {
       byType.set(placement.detailType, entries);
     }
     for (const [detailType, placements] of byType) {
-      const mesh = this.createMesh(detailType, placements);
+      const mesh = this.createMesh(detailType, placements, surfaceProjection);
       this.meshes.push(mesh);
       this.group.add(mesh);
     }
@@ -235,6 +237,7 @@ export class ProceduralDetailRenderer {
   private createMesh(
     detailType: DetailType,
     placements: readonly ProceduralDetailPlacement[],
+    surfaceProjection?: WorldLodSurfaceProjection,
   ): THREE.InstancedMesh {
     const geometry = geometryForDetail(detailType);
     const material = new THREE.MeshStandardMaterial({
@@ -258,6 +261,23 @@ export class ProceduralDetailRenderer {
 
     placements.forEach((placement, index) => {
       direction.set(placement.center.x, placement.center.y, placement.center.z).normalize();
+      if (surfaceProjection !== undefined) {
+        const surfaceRadius = proceduralSurfaceRadius(placement.elevation, placement.level);
+        const localCenter = surfaceProjection.transform(placement.center, surfaceRadius);
+        const objectScale = placement.cellRadius * detailScale(detailType) * placement.scale;
+        object.position.set(
+          localCenter.x + placement.x * placement.cellRadius * 0.72,
+          localCenter.y + placement.y * placement.cellRadius * 0.72,
+          localCenter.z + objectScale * 0.45,
+        );
+        align.setFromUnitVectors(worldUp, new THREE.Vector3(0, 0, 1));
+        spin.setFromAxisAngle(new THREE.Vector3(0, 0, 1), placement.rotation);
+        object.quaternion.copy(align).multiply(spin);
+        object.scale.setScalar(objectScale);
+        object.updateMatrix();
+        mesh.setMatrixAt(index, object.matrix);
+        return;
+      }
       reference.set(0, Math.abs(direction.y) < 0.92 ? 1 : 0, Math.abs(direction.y) < 0.92 ? 0 : 1);
       tangentX.crossVectors(reference, direction).normalize();
       tangentY.crossVectors(direction, tangentX).normalize();

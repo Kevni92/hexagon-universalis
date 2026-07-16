@@ -5,7 +5,14 @@ import { createGeodesicTopology } from '@/topology/geodesic';
 import { createTileShowcaseWorld, tileShowcaseCellColors } from '@/data/tileShowcase';
 import { createLodFocusDiagnostics } from '@/topology/lod/diagnostics';
 import { WorldLodController } from '@/topology/lod/WorldLod';
+import { cameraFocusDirection } from '@/topology/lod/selection';
 import { DESKTOP_QUALITY_PROFILE, type QualityProfile } from '@/topology/lod/profiles';
+import {
+  createFlatSurfaceProjection,
+  WorldLodProjectionController,
+  type WorldLodSurfaceProjection,
+} from '@/topology/lod/projection';
+import { WORLD_LOD_LEVELS } from '@/topology/lod/sevenLevelArchitecture';
 import { EarthChunkRuntime, type EarthRuntimeStatus } from '@/data/EarthChunkRuntime';
 import { EarthWorldModel } from '@/data/EarthWorldModel';
 import { ProceduralWorldLod, type ProceduralWorldLodLevel } from '@/world/proceduralWorldLod';
@@ -85,6 +92,7 @@ export class SceneRenderer {
   private readonly proceduralDetails: ProceduralDetailRenderer | null;
   private readonly resizeObserver: ResizeObserver | null;
   private readonly earthRuntime: EarthChunkRuntime | null;
+  private readonly projectionController = new WorldLodProjectionController();
   private readonly earthModel = new EarthWorldModel();
   private visibleUnits: readonly import('@/topology/lod/WorldLod').VisibleUnit[] = [];
   private requestedDataKey = '';
@@ -434,10 +442,27 @@ export class SceneRenderer {
 
     this.visibleUnits =
       this.proceduralWorldLod?.update(cameraState) ?? this.worldLod?.update(cameraState) ?? [];
-    this.chunkRenderer.update(this.visibleUnits);
+    const activeLevel = this.activeResolutionLevel ?? 'global';
+    const projectionState = this.projectionController.update({
+      levelName: activeLevel,
+      projectedCellSizePx: projectedCellSizeForLevel(
+        activeLevel,
+        this.proceduralWorldLod?.activeFrequency,
+        cameraState,
+      ),
+      focus: cameraFocusDirection(cameraState),
+    });
+    const surfaceProjection: WorldLodSurfaceProjection | undefined =
+      projectionState.mode === 'flat' && projectionState.frame !== null
+        ? createFlatSurfaceProjection(projectionState.frame)
+        : undefined;
+    this.chunkRenderer.update(this.visibleUnits, surfaceProjection);
     const canvas = this.renderer.domElement;
+    canvas.dataset.projectionMode = projectionState.mode;
+    canvas.dataset.projectionGeneration = String(projectionState.generation);
+    canvas.dataset.projectionReason = projectionState.reason;
+    canvas.dataset.projectionCenter = formatVector(projectionState.frame?.center ?? null);
     if (this.proceduralWorldLod !== null) {
-      const activeLevel = this.activeResolutionLevel ?? 'global';
       const reliefScale = proceduralReliefScale(activeLevel);
       canvas.dataset.lodLevel = activeLevel;
       canvas.dataset.reliefLandFactor = reliefScale.land.toFixed(2);
@@ -467,7 +492,7 @@ export class SceneRenderer {
         : 'false';
     if (this.proceduralWorldLod !== null) {
       canvas.dataset.worldFingerprint = this.proceduralWorldLod.fingerprint;
-      this.updateProceduralDetailsAndDiagnostics();
+      this.updateProceduralDetailsAndDiagnostics(surfaceProjection);
       this.emitProceduralState();
       this.publishProceduralWorkDiagnostics();
     }
@@ -492,6 +517,9 @@ export class SceneRenderer {
         ...common,
         this.proceduralWorldLod.fingerprint,
         this.proceduralWorldLod.streamingRevision,
+        this.projectionController.current.mode === 'flat'
+          ? this.projectionController.focusKey(cameraFocusDirection(this.currentCameraState()))
+          : '',
       ]);
     return JSON.stringify([
       ...common,
@@ -529,13 +557,16 @@ export class SceneRenderer {
     canvas.dataset.detailDisposals = String(stats.detailDisposals);
   }
 
-  private updateProceduralDetailsAndDiagnostics(): void {
+  private updateProceduralDetailsAndDiagnostics(
+    surfaceProjection?: WorldLodSurfaceProjection,
+  ): void {
     const proceduralWorldLod = this.proceduralWorldLod;
     if (proceduralWorldLod === null) return;
     this.proceduralDetails?.update(
       this.visibleUnits,
       (cellId) => proceduralWorldLod.projectedCell(cellId),
       proceduralWorldLod.fingerprint,
+      surfaceProjection,
     );
     const canvas = this.renderer.domElement;
     canvas.dataset.detailInstances = String(this.activeDetailInstanceCount);
@@ -606,6 +637,27 @@ export class SceneRenderer {
       })
       .catch(() => undefined);
   }
+}
+
+function projectedCellSizeForLevel(
+  level: ProceduralWorldLodLevel,
+  activeFrequency: number | undefined,
+  camera: ReturnType<typeof computeLocalCameraState>,
+): number {
+  const frequency =
+    activeFrequency ??
+    WORLD_LOD_LEVELS.find((candidate) => candidate.name === level)?.frequency ??
+    8;
+  const cellCount = 10 * frequency ** 2 + 2;
+  const distance = Math.hypot(
+    camera.position.x - cameraFocusDirection(camera).x * camera.sphereRadius,
+    camera.position.y - cameraFocusDirection(camera).y * camera.sphereRadius,
+    camera.position.z - cameraFocusDirection(camera).z * camera.sphereRadius,
+  );
+  if (distance <= 0) return Infinity;
+  const meanAngularRadius = Math.sqrt((4 * Math.PI) / cellCount) / 2;
+  const focalLengthPx = camera.viewportHeight / (2 * Math.tan(camera.fovY / 2));
+  return ((meanAngularRadius * camera.sphereRadius) / distance) * focalLengthPx;
 }
 
 function quantizeAngle(angle: number, stepRadians: number): number {

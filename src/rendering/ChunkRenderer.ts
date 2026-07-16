@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import type { GeodesicCell, GeodesicTopology, Vector3 } from '@/topology/geodesic';
 import { visibleCellId, type VisibleUnit } from '@/topology/lod/WorldLod';
 import type { WorldLodLevelName } from '@/topology/lod/sevenLevelArchitecture';
+import type { WorldLodSurfaceProjection } from '@/topology/lod/projection';
 import { createCellGlobeGeometryData, type CellPodiumOptions } from './CellGlobe';
 
 export type ChunkSurfaceRadius = (
@@ -51,6 +52,7 @@ export class ChunkRenderer {
     THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>,
     Transition
   >();
+  private surfaceProjection: WorldLodSurfaceProjection | undefined;
   private disposed = false;
   private geometryBuildCount = 0;
   private geometryDisposeCount = 0;
@@ -77,7 +79,7 @@ export class ChunkRenderer {
   }
 
   public get activeSubstrateDrawCallCount(): number {
-    return this.substrateMesh === null ? 0 : 1;
+    return this.substrateMesh === null || !this.substrateMesh.visible ? 0 : 1;
   }
 
   /** Gesamtzahl aktuell materialisierter Zellen über alle aktiven Chunks. */
@@ -166,8 +168,13 @@ export class ChunkRenderer {
    * nicht mehr enthaltene Units, lässt bestehende Units unverändert (stabile
    * Chunk-Identität über `unit.key`).
    */
-  public update(units: readonly VisibleUnit[]): void {
+  public update(
+    units: readonly VisibleUnit[],
+    surfaceProjection?: WorldLodSurfaceProjection,
+  ): void {
     if (this.disposed) throw new Error('ChunkRenderer wurde bereits disposed.');
+    this.surfaceProjection = surfaceProjection;
+    if (this.substrateMesh !== null) this.substrateMesh.visible = surfaceProjection === undefined;
     const initialUpdate = this.meshesByKey.size === 0 && this.transitions.size === 0;
     const nextKeys = new Set(units.map((unit) => unit.key));
 
@@ -262,7 +269,7 @@ export class ChunkRenderer {
     this.meshesByKey.clear();
     this.cachedMeshesByKey.clear();
     this.preloadedMeshesByKey.clear();
-    this.update(units);
+    this.update(units, this.surfaceProjection);
   }
 
   public dispose(): void {
@@ -288,7 +295,7 @@ export class ChunkRenderer {
     const worldLevel = unit.worldLevel ?? legacyWorldLevel(unit.level);
     const surfaceRadius = this.surfaceRadius;
     const podiumOptions: CellPodiumOptions | undefined =
-      surfaceRadius === undefined
+      surfaceRadius === undefined || this.surfaceProjection !== undefined
         ? undefined
         : {
             baseRadius: this.radius * PODIUM_BASE_RADIUS_FACTOR,
@@ -303,6 +310,7 @@ export class ChunkRenderer {
         ? undefined
         : (position, cellId) => surfaceRadius(position, worldLevel, cellId),
       podiumOptions,
+      this.surfaceProjection,
     );
 
     const geometry = new THREE.BufferGeometry();
@@ -317,7 +325,10 @@ export class ChunkRenderer {
       flatShading: false,
       roughness: 0.72,
       metalness: 0.08,
-      side: unit.level === 3 ? THREE.DoubleSide : THREE.FrontSide,
+      side:
+        this.surfaceProjection !== undefined || unit.level === 3
+          ? THREE.DoubleSide
+          : THREE.FrontSide,
       vertexColors: this.cellColors !== undefined,
     });
 
@@ -431,10 +442,10 @@ export class ChunkRenderer {
 
   private unitSignature(unit: VisibleUnit): string {
     const cached = this.signaturesByUnit.get(unit);
-    if (cached !== undefined) return cached;
-    const signature = unit.cells.map((_cell, index) => visibleCellId(unit, index)).join('|');
-    this.signaturesByUnit.set(unit, signature);
-    return signature;
+    const signature =
+      cached ?? unit.cells.map((_cell, index) => visibleCellId(unit, index)).join('|');
+    if (cached === undefined) this.signaturesByUnit.set(unit, signature);
+    return `${signature}:${this.surfaceProjection?.signature ?? 'globe'}`;
   }
 }
 

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 
 import type { GeodesicTopology, Vector3 } from '@/topology/geodesic';
 import type { TerrainClass } from '@/data/terrain';
+import type { WorldLodSurfaceProjection } from '@/topology/lod/projection';
 import { terrainColor } from './TerrainVisuals';
 
 export interface CellGlobeGeometryData {
@@ -43,12 +44,13 @@ export function createCellGlobeGeometryData(
   surfaceMode: CellSurfaceMode = 'spherical',
   surfaceRadius?: CellSurfaceRadius,
   podiumOptions?: CellPodiumOptions,
+  surfaceProjection?: WorldLodSurfaceProjection,
 ): CellGlobeGeometryData {
   if (!Number.isFinite(radius) || radius <= 0)
     throw new RangeError('radius muss größer als 0 sein.');
 
   const podium = resolvePodiumOptions(podiumOptions);
-  if (podium !== undefined && surfaceMode !== 'spherical')
+  if (podium !== undefined && (surfaceMode !== 'spherical' || surfaceProjection !== undefined))
     throw new RangeError('Podestgeometrie unterstützt nur sphärische Zellflächen.');
   const buffers: GeometryBuffers = {
     positions: [],
@@ -67,7 +69,8 @@ export function createCellGlobeGeometryData(
         ? undefined
         : shadeRgb(topColor, podium.sideColorFactor);
     const topNormal =
-      surfaceMode === 'tangent-plane' || podium !== undefined ? cell.center : undefined;
+      surfaceProjection?.normal ??
+      (surfaceMode === 'tangent-plane' || podium !== undefined ? cell.center : undefined);
     const topVertexNormal = topNormal === undefined ? normalize : (): Vector3 => topNormal;
     const topCenter = surfaceVertex(
       cell.center,
@@ -75,6 +78,7 @@ export function createCellGlobeGeometryData(
       radius,
       surfaceRadius,
       podium?.baseRadius,
+      surfaceProjection,
     );
     const topBoundary = cell.boundary.map((boundary) =>
       surfaceVertex(
@@ -83,6 +87,7 @@ export function createCellGlobeGeometryData(
         radius,
         surfaceRadius,
         podium?.baseRadius,
+        surfaceProjection,
       ),
     );
 
@@ -93,7 +98,7 @@ export function createCellGlobeGeometryData(
         topCenter,
         at(topBoundary, index),
         at(topBoundary, nextIndex),
-        cell.center,
+        topNormal ?? cell.center,
         cell.id,
         topColor,
         topVertexNormal,
@@ -211,11 +216,12 @@ function surfaceVertex(
   fallbackRadius: number,
   surfaceRadius?: CellSurfaceRadius,
   baseRadius?: number,
+  surfaceProjection?: WorldLodSurfaceProjection,
 ): Vector3 {
   const vertexRadius = resolvedRadius(point, cellId, fallbackRadius, surfaceRadius);
   if (baseRadius !== undefined && vertexRadius <= baseRadius)
     throw new RangeError(`Podestbasis muss unter der Oberfläche von Zelle ${cellId} liegen.`);
-  return scale(point, vertexRadius);
+  return surfaceProjection?.transform(normalize(point), vertexRadius) ?? scale(point, vertexRadius);
 }
 
 function resolvedRadius(
