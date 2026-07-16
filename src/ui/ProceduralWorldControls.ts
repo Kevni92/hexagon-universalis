@@ -21,6 +21,7 @@ const DENSITY_LABELS: Readonly<Record<ProceduralDensityProfileId, string>> = {
   low: 'Niedrig',
   standard: 'Standard',
   high: 'Hoch',
+  ultra: 'Ultra (experimentell)',
 };
 
 const LOD_LABELS: Readonly<Record<ProceduralWorldLodLevel, string>> = {

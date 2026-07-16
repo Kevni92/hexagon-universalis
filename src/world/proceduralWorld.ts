@@ -10,7 +10,7 @@ import { createSeededNoise3D, hashText } from './seededNoise';
 export const PROCEDURAL_WORLD_FORMAT_VERSION = 1 as const;
 export const PROCEDURAL_WORLD_GENERATOR_VERSION = '1.0.0';
 
-export type ProceduralDensityProfileId = 'low' | 'standard' | 'high';
+export type ProceduralDensityProfileId = 'low' | 'standard' | 'high' | 'ultra';
 
 export interface ProceduralDensityProfile {
   readonly id: ProceduralDensityProfileId;
@@ -24,6 +24,7 @@ export const PROCEDURAL_DENSITY_PROFILES: Readonly<
   low: { id: 'low', frequency: 4, cellCount: 162 },
   standard: { id: 'standard', frequency: 8, cellCount: 642 },
   high: { id: 'high', frequency: 16, cellCount: 2562 },
+  ultra: { id: 'ultra', frequency: 16, cellCount: 2562 },
 };
 
 export interface ProceduralWorldConfig {

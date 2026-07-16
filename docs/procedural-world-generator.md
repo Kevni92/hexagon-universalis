@@ -10,15 +10,15 @@ Der Generator erzeugt ein Three.js-unabhängiges, vollständig serialisierbares 
 
 `createProceduralWorld` normalisiert und validiert folgende Parameter:
 
-| Parameter            |              Standard | Gültiger Bereich          |
-| -------------------- | --------------------: | ------------------------- |
-| `seed`               | `hexagon-universalis` | 1–128 Zeichen             |
-| `density`            |            `standard` | `low`, `standard`, `high` |
-| `landFraction`       |                `0.38` | `0.20`–`0.75`             |
-| `continentScale`     |                `1.35` | `0.5`–`4.0`               |
-| `elevationVariation` |                `0.32` | `0.0`–`1.0`               |
-| `climateScale`       |                 `2.4` | `0.5`–`8.0`               |
-| `mountainStrength`   |                `0.42` | `0.0`–`1.0`               |
+| Parameter            |              Standard | Gültiger Bereich                   |
+| -------------------- | --------------------: | ---------------------------------- |
+| `seed`               | `hexagon-universalis` | 1–128 Zeichen                      |
+| `density`            |            `standard` | `low`, `standard`, `high`, `ultra` |
+| `landFraction`       |                `0.38` | `0.20`–`0.75`                      |
+| `continentScale`     |                `1.35` | `0.5`–`4.0`                        |
+| `elevationVariation` |                `0.32` | `0.0`–`1.0`                        |
+| `climateScale`       |                 `2.4` | `0.5`–`8.0`                        |
+| `mountainStrength`   |                `0.42` | `0.0`–`1.0`                        |
 
 Unterstützte Dichteprofile verwenden ausschließlich gültige geodätische Frequenzen:
 
@@ -27,6 +27,13 @@ Unterstützte Dichteprofile verwenden ausschließlich gültige geodätische Freq
 | `low`      |        4 |                 162 |
 | `standard` |        8 |                 642 |
 | `high`     |       16 |               2.562 |
+| `ultra`    |       16 |               2.562 |
+
+Das experimentelle Profil `ultra` erhöht nicht die Referenzweltfrequenz,
+sondern die sichtbereichsgechunkte LOD-Detailadressierung. Dadurch bleiben
+Seed-Fingerprints und Weltwerte mit einem kontrollierten f16-Arbeitssatz
+deterministisch, während die feinste Renderstufe ungefähr 200.000 Zellen
+adressieren kann.
 
 ## Verfahren
 

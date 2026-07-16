@@ -35,6 +35,11 @@ describe('ProceduralWorldControls', () => {
     expect(container.querySelector('[data-testid="procedural-cell-count"]')?.textContent).toBe(
       '642',
     );
+    expect(
+      [...container.querySelectorAll('option')].some(
+        (option) => option.value === 'ultra' && option.textContent === 'Ultra (experimentell)',
+      ),
+    ).toBe(true);
 
     controls.update(state({ lodLevel: 'local' }));
     expect(container.querySelector('[data-testid="procedural-lod"]')?.textContent).toBe('Lokal');

@@ -26,11 +26,17 @@ die bisherige gültige Welt bleibt sichtbar.
 
 ## Unterstützte Dichteprofile
 
-| Profil   | ID         | globale Frequenz | tatsächliche globale Zellzahl |
-| -------- | ---------- | ---------------: | ----------------------------: |
-| Niedrig  | `low`      |                4 |                           162 |
-| Standard | `standard` |                8 |                           642 |
-| Hoch     | `high`     |               16 |                         2.562 |
+| Profil                | ID         | globale Frequenz | tatsächliche globale Zellzahl |
+| --------------------- | ---------- | ---------------: | ----------------------------: |
+| Niedrig               | `low`      |                4 |                           162 |
+| Standard              | `standard` |                8 |                           642 |
+| Hoch                  | `high`     |               16 |                         2.562 |
+| Ultra (experimentell) | `ultra`    |               16 |                         2.562 |
+
+`ultra` verwendet dieselbe deterministische Referenzwelt wie `high`, aktiviert
+aber in der LOD-Runtime eine experimentelle Detailstufe mit `f144 / 207.362`
+global adressierbaren Zellen. Nur budgetierte sichtbare Chunks dürfen
+materialisiert werden.
 
 Das Panel bietet ausschließlich diese diskreten Profile an. Die feineren Regional-/Lokalbudgets
 und ihre Zellzahlen sind in [procedural-world-lod.md](./procedural-world-lod.md) dokumentiert.

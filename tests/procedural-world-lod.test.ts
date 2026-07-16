@@ -33,12 +33,19 @@ describe('ProceduralWorldLod', () => {
       regional: 5762,
       local: 10242,
     });
+    expect(PROCEDURAL_LOD_PROFILES.ultra.levelCellCounts).toEqual({
+      global: 2562,
+      regional: 30252,
+      local: 207362,
+    });
+    expect(PROCEDURAL_LOD_PROFILES.ultra.maxActiveCells).toBe(16_384);
+    expect(PROCEDURAL_LOD_PROFILES.ultra.maxDrawCalls).toBe(33);
 
     for (const profile of Object.values(PROCEDURAL_LOD_PROFILES)) {
       const { global, regional, local } = profile.quality.levels;
       expect(global.frequency).toBeLessThan(regional.frequency);
       expect(regional.frequency).toBeLessThan(local.frequency);
-      expect(profile.maxDrawCalls).toBe(1);
+      expect(profile.maxActiveCells).toBeLessThanOrEqual(profile.levelCellCounts.local);
     }
   });
 
