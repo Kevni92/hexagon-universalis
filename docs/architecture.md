@@ -42,6 +42,10 @@ zur mehrstufigen geodätischen Auflösungsarchitektur.
 Die verbindliche Zielarchitektur für die siebenstufige prozedurale Welt-LOD
 mit sichtbereichsgechunkten Budgets steht in
 [0002-seven-level-world-lod.md](./architecture/0002-seven-level-world-lod.md).
+Die darauf aufbauende Entscheidung für den hybriden Globe-/Flat-Nahbereich,
+lokale Tangentialprojektion, Projektionshysterese, Rezentrierung und Picking
+steht in
+[0003-hybrid-globe-flat-projection.md](./architecture/0003-hybrid-globe-flat-projection.md).
 
 Die Offline-Erzeugung, das komprimierte Chunkformat, Integritäts- und
 Größenprüfungen sowie die Debugkarten der realen Referenzregionen beschreibt
