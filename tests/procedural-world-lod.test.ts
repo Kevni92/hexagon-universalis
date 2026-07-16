@@ -34,9 +34,12 @@ describe('ProceduralWorldLod', () => {
       local: 10242,
     });
     expect(PROCEDURAL_LOD_PROFILES.ultra.levelCellCounts).toEqual({
-      global: 2562,
-      regional: 5762,
-      local: 10242,
+      global: 642,
+      continental: 1692,
+      macroregional: 4412,
+      regional: 11562,
+      subregional: 30252,
+      local: 79212,
       detail: 207362,
     });
     expect(PROCEDURAL_LOD_PROFILES.ultra.maxActiveCells).toBe(16384);
@@ -60,6 +63,34 @@ describe('ProceduralWorldLod', () => {
 
     expect(new Set(detail.map((unit) => unit.level))).toEqual(new Set([3]));
     expect(cellsAtLevel(detail, 3)).toHaveLength(32 * 480);
+  });
+
+  it('materialisiert Zwischenstufen als vollständige Kugeltopologie statt als lokales Band', () => {
+    const world = new ProceduralWorldLod({ seed: 'ultra-chunk-centering', density: 'ultra' });
+    const units = world.update(camera(2.2));
+    const cells = units.flatMap((unit) => unit.cells);
+    expect(['continental', 'macroregional', 'regional', 'subregional', 'local']).toContain(
+      world.activeLevel,
+    );
+    expect(units).toHaveLength(1);
+    expect(cells.length).toBeGreaterThan(10_000);
+  });
+
+  it('verwendet für Ultra eine feinere Referenzwelt und erzeugt stufenabhängige Höhen', async () => {
+    const world = new ProceduralWorldLod({ seed: 'ultra-height-resolution', density: 'ultra' });
+
+    expect(world.sourceCells).toHaveLength(10 * 21 ** 2 + 2);
+    await world.prepare(camera(1.2));
+    const detail = world.update(camera(1.2));
+    const elevations = detail
+      .flatMap((unit) =>
+        unit.cells.map((_cell, index) => world.projectedCell(visibleCellId(unit, index))),
+      )
+      .filter((cell): cell is NonNullable<typeof cell> => cell !== undefined)
+      .map((cell) => cell.elevation);
+
+    expect(new Set(detail.map((unit) => unit.worldLevel))).toEqual(new Set(['detail']));
+    expect(Math.max(...elevations) - Math.min(...elevations)).toBeGreaterThan(0.05);
   });
 
   it('bereitet Ultra-Detail-Chunks vor dem Zoom mit Fortschritt vor', async () => {

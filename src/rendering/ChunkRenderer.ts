@@ -2,11 +2,12 @@ import * as THREE from 'three';
 
 import type { GeodesicCell, GeodesicTopology, Vector3 } from '@/topology/geodesic';
 import { visibleCellId, type VisibleUnit } from '@/topology/lod/WorldLod';
+import type { WorldLodLevelName } from '@/topology/lod/sevenLevelArchitecture';
 import { createCellGlobeGeometryData, type CellPodiumOptions } from './CellGlobe';
 
 export type ChunkSurfaceRadius = (
   position: Vector3,
-  level: 0 | 1 | 2 | 3,
+  level: WorldLodLevelName,
   cellId: string,
 ) => number;
 
@@ -284,12 +285,10 @@ export class ChunkRenderer {
     signature: string,
   ): THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial> {
     const topology = unitToTopology(unit);
-    // Ultra uses a tangent-plane detail sheet. Relief is still represented by
-    // the tile colors/details, while a shared radius keeps adjacent cells
-    // watertight instead of opening holes where neighboring elevations differ.
-    const surfaceRadius = unit.level === 3 ? undefined : this.surfaceRadius;
+    const worldLevel = unit.worldLevel ?? legacyWorldLevel(unit.level);
+    const surfaceRadius = this.surfaceRadius;
     const podiumOptions: CellPodiumOptions | undefined =
-      surfaceRadius === undefined || unit.level === 3
+      surfaceRadius === undefined
         ? undefined
         : {
             baseRadius: this.radius * PODIUM_BASE_RADIUS_FACTOR,
@@ -299,12 +298,10 @@ export class ChunkRenderer {
       topology,
       this.radius + unit.level * 0.003,
       this.cellColors,
-      (surfaceRadius === undefined && unit.level >= 2) || unit.level === 3
-        ? 'tangent-plane'
-        : 'spherical',
+      surfaceRadius === undefined && unit.level >= 2 ? 'tangent-plane' : 'spherical',
       surfaceRadius === undefined
         ? undefined
-        : (position, cellId) => surfaceRadius(position, unit.level, cellId),
+        : (position, cellId) => surfaceRadius(position, worldLevel, cellId),
       podiumOptions,
     );
 
@@ -455,6 +452,13 @@ function smoothstep(value: number): number {
 
 function yieldToBrowser(): Promise<void> {
   return new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+}
+
+function legacyWorldLevel(level: 0 | 1 | 2 | 3): WorldLodLevelName {
+  if (level === 3) return 'detail';
+  if (level === 2) return 'local';
+  if (level === 1) return 'regional';
+  return 'global';
 }
 
 function unitToTopology(unit: VisibleUnit): GeodesicTopology {

@@ -7,6 +7,7 @@ import {
   type LodPatch,
 } from './hierarchy';
 import type { QualityProfile } from './profiles';
+import type { WorldLodLevelName } from './sevenLevelArchitecture';
 import {
   cameraFocusDirection,
   isCellVisible,
@@ -26,6 +27,8 @@ import {
 export interface VisibleUnit {
   readonly key: string;
   readonly level: 0 | 1 | 2 | 3;
+  /** Semantische Welt-LOD-Stufe für gechunkte Profile; Legacy-Units lassen sie weg. */
+  readonly worldLevel?: WorldLodLevelName;
   readonly cells: readonly LodCell[];
   /** Optional voll qualifizierte IDs, wenn die lokale Elternkette mehr als einen Index umfasst. */
   readonly cellIds?: readonly string[];

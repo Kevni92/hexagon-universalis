@@ -113,6 +113,22 @@ export function createProceduralWorld(
   return createProceduralWorldFromTopology(normalized, createGeodesicTopology(profile.frequency));
 }
 
+/**
+ * Erzeugt für experimentelle Ultra-Welten eine feinere fachliche Referenz-
+ * probe als die sichtbare Legacy-Dichte. Die Runtime materialisiert weiterhin
+ * nur sichtbare Chunks, bekommt aber echte Zwischenhöhen statt mehrfach
+ * wiederverwendeter f16-Werte.
+ */
+export function createProceduralWorldAtFrequency(
+  config: Partial<ProceduralWorldConfig>,
+  frequency: number,
+): ProceduralWorld {
+  const normalized = normalizeProceduralWorldConfig(config);
+  if (frequency < 1 || !Number.isInteger(frequency))
+    throw new RangeError('Referenzfrequenz muss eine positive Ganzzahl sein.');
+  return buildProceduralWorld(normalized, createGeodesicTopology(frequency));
+}
+
 export function createProceduralWorldFromTopology(
   config: Partial<ProceduralWorldConfig>,
   topology: GeodesicTopology,
@@ -124,6 +140,13 @@ export function createProceduralWorldFromTopology(
       `Topologie passt nicht zum Dichteprofil ${profile.id}: erwartet f=${profile.frequency} mit ${profile.cellCount} Zellen.`,
     );
 
+  return buildProceduralWorld(normalized, topology);
+}
+
+function buildProceduralWorld(
+  normalized: ProceduralWorldConfig,
+  topology: GeodesicTopology,
+): ProceduralWorld {
   const rawCells = createRawFields(normalized, topology);
   const elevationThreshold = quantile(
     rawCells.map((cell) => cell.rawElevation),
@@ -153,7 +176,7 @@ export function createProceduralWorldFromTopology(
     formatVersion: PROCEDURAL_WORLD_FORMAT_VERSION,
     generatorVersion: PROCEDURAL_WORLD_GENERATOR_VERSION,
     config: normalized,
-    frequency: profile.frequency,
+    frequency: topology.frequency,
     cellCount: cells.length,
     cells,
   };

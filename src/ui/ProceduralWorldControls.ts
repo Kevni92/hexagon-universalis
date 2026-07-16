@@ -26,7 +26,10 @@ const DENSITY_LABELS: Readonly<Record<ProceduralDensityProfileId, string>> = {
 
 const LOD_LABELS: Readonly<Record<ProceduralWorldLodLevel, string>> = {
   global: 'Global',
+  continental: 'Kontinental',
+  macroregional: 'Makroregional',
   regional: 'Regional',
+  subregional: 'Subregional',
   local: 'Lokal',
   detail: 'Detail',
 };

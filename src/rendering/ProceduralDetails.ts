@@ -81,7 +81,7 @@ export function createProceduralDetailPlan(
   };
 
   for (const unit of [...units].sort((left, right) => left.key.localeCompare(right.key))) {
-    const level = levelName(unit.level);
+    const level = unit.worldLevel ?? levelName(unit.level);
     if (level !== 'local' && level !== 'detail') continue;
     const entries = unit.cells
       .map((lodCell, index) => {
@@ -182,7 +182,10 @@ export class ProceduralDetailRenderer {
     worldFingerprint: string,
   ): void {
     if (this.disposed) throw new Error('ProceduralDetailRenderer wurde bereits disposed.');
-    const localUnits = units.filter((unit) => unit.level === 2 || unit.level === 3);
+    const localUnits = units.filter((unit) => {
+      const level = unit.worldLevel ?? levelName(unit.level);
+      return level === 'local' || level === 'detail';
+    });
     if (localUnits.length === 0) {
       if (this.worldFingerprint !== '' && this.worldFingerprint !== worldFingerprint) {
         this.disposeMeshes();

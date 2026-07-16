@@ -1,4 +1,17 @@
-# Prozedurale Welt: Global-, Regional- und Lokal-LOD
+# Prozedurale Welt: Siebenstufiges Globe-LOD
+
+## Ultra-Implementierung (#107)
+
+Die Ultra-Runtime nutzt die sieben Stufen `f8`, `f13`, `f21`, `f34`, `f55`, `f89` und `f144`.
+Zwischenstufen werden als 512-Zellen-Chunks erzeugt; die Detailstufe verwendet 32 Chunks mit je
+480 Zellen. Die fachliche Ultra-Referenz wird mit `f21` erzeugt und durch seeded Detail-Noise
+verfeinert. Dadurch entstehen innerhalb einer LOD-Stufe unterschiedliche HÃ¶hen, und die
+Reliefamplitude nimmt beim Hineinzoomen zu.
+
+Bei Fokus- oder Rotationswechseln streamt der Chunk-Cache den neuen vollstÃ¤ndigen Satz in
+Zeitscheiben. Bis zur Aktivierung bleibt der vorherige vollstÃ¤ndige Satz sichtbar. Ein
+Streaming-Revision-Key sorgt dafÃ¼r, dass der neue Satz nach Fertigstellung ohne sichtbare leere
+Chunks atomar in den Renderer gelangt.
 
 > Der aktuelle Runtime-Stand dieses Dokuments beschreibt weiterhin die
 > implementierte Drei-Stufen-Pipeline. Die verbindliche Zielarchitektur für
@@ -70,12 +83,12 @@ und Viewportmaß benötigt. Damit prüfen Tests reale Arbeit statt instabiler Ru
 Die ausgewählte Dichte bezeichnet die globale Referenzauflösung aus #77. Regional und Lokal
 erhöhen die geometrische Frequenz darüber hinaus. Für Frequenz `f` gilt `10 × f² + 2` Zellen.
 
-| Dichte     |      Global |    Regional |        Lokal | Regional ein/aus | Lokal ein/aus |         max. aktive Zellen | Draw Calls | Zielbudget Generierung |
-| ---------- | ----------: | ----------: | -----------: | ---------------: | ------------: | -------------------------: | ---------: | ---------------------: |
-| `low`      |    f4 / 162 |    f8 / 642 |  f16 / 2.562 |       70 / 66 px |    70 / 52 px |                      2.562 |          1 |                  40 ms |
-| `standard` |    f8 / 642 | f16 / 2.562 | f32 / 10.242 |       35 / 34 px |    55 / 40 px |                     10.242 |          1 |                  90 ms |
-| `high`     | f16 / 2.562 | f24 / 5.762 | f32 / 10.242 |       18 / 17 px |    28 / 20 px |                     10.242 |          1 |                 180 ms |
-| `ultra`    | f16 / 2.562 | f24 / 5.762 | f32 / 10.242 |       18 / 17 px |    28 / 20 px | 15.360 aktiv / 16.384 max. |         33 |                 250 ms |
+| Dichte     |      Global |    Regional |        Lokal |           Regional ein/aus | Lokal ein/aus |         max. aktive Zellen | Draw Calls | Zielbudget Generierung |
+| ---------- | ----------: | ----------: | -----------: | -------------------------: | ------------: | -------------------------: | ---------: | ---------------------: |
+| `low`      |    f4 / 162 |    f8 / 642 |  f16 / 2.562 |                 70 / 66 px |    70 / 52 px |                      2.562 |          1 |                  40 ms |
+| `standard` |    f8 / 642 | f16 / 2.562 | f32 / 10.242 |                 35 / 34 px |    55 / 40 px |                     10.242 |          1 |                  90 ms |
+| `high`     | f16 / 2.562 | f24 / 5.762 | f32 / 10.242 |                 18 / 17 px |    28 / 20 px |                     10.242 |          1 |                 180 ms |
+| `ultra`    |    f8 / 642 | f13 / 1.692 |  f21 / 4.412 | sieben Stufen aus ADR 0002 |             — | 15.360 aktiv / 16.384 max. |         33 |                 250 ms |
 
 `ultra` ist ein opt-in Experiment. Zusätzlich zu den sicheren f16/f24/f32-
 Stufen adressiert die Detailstufe `f144 / 207.362` Zellen. Die f144-Geometrie

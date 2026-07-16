@@ -356,7 +356,28 @@ test('ultra profile preloads detail chunks behind a progress overlay', async ({ 
   await expect(loading).toBeHidden({ timeout: 60_000 });
 
   const canvas = page.locator('canvas.viewport-canvas');
+  await canvas.dispatchEvent('wheel', { deltaY: -400 });
+  const intermediateLevel = await canvas.getAttribute('data-lod-level');
+  expect(['macroregional', 'regional']).toContain(intermediateLevel);
+  await expect(canvas).toHaveAttribute(
+    'data-lod-finest-cell-count',
+    intermediateLevel === 'macroregional' ? '4412' : '11562',
+  );
   await zoomUntilLod(canvas, 'detail', -400, 8);
   await expect(canvas).toHaveAttribute('data-lod-finest-cell-count', '15360');
+
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (box !== null) {
+    await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.78, box.y + box.height * 0.5, { steps: 8 });
+    await page.mouse.up();
+    await expect(canvas).toHaveAttribute('data-lod-level', 'detail');
+    await expect(canvas).toHaveAttribute('data-lod-finest-cell-count', '15360');
+    await expect
+      .poll(async () => Number(await canvas.getAttribute('data-render-draw-calls')))
+      .toBeGreaterThan(0);
+  }
   expect(pageErrors).toEqual([]);
 });

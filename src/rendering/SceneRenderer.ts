@@ -30,7 +30,6 @@ export const MAX_RENDER_FPS = 60;
 const FRAME_INTERVAL_MS = 1000 / MAX_RENDER_FPS;
 const CAMERA = { fov: 45, near: 0.1, far: 100, z: 3.4 } as const;
 const SHOWCASE_TOPOLOGY_FREQUENCY = 2;
-const PROCEDURAL_LEVELS = ['global', 'regional', 'local', 'detail'] as const;
 
 export type WorldMode = 'earth' | 'demo' | 'lod' | 'procedural';
 
@@ -135,7 +134,7 @@ export class SceneRenderer {
           const elevation =
             proceduralWorldLod.projectedCell(cellId)?.elevation ??
             proceduralWorldLod.sampleAt(position).elevation;
-          return proceduralSurfaceRadius(elevation, PROCEDURAL_LEVELS[level]);
+          return proceduralSurfaceRadius(elevation, level);
         },
         3,
         LOD_TRANSITION_DURATION_SECONDS,
@@ -477,7 +476,11 @@ export class SceneRenderer {
       viewportHeight,
     ];
     if (this.proceduralWorldLod !== null)
-      return JSON.stringify([...common, this.proceduralWorldLod.fingerprint]);
+      return JSON.stringify([
+        ...common,
+        this.proceduralWorldLod.fingerprint,
+        this.proceduralWorldLod.streamingRevision,
+      ]);
     return JSON.stringify([
       ...common,
       this.world.quaternion.x,

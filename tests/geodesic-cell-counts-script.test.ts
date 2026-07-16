@@ -16,6 +16,7 @@ describe('geodesic cell count formula', () => {
     [8, 642],
     [16, 2562],
     [32, 10242],
+    [34, 11562],
   ])(
     'matches the documented reference counts used in the ADR for frequency %i',
     (frequency, expected) => {
