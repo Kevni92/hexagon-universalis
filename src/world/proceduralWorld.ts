@@ -7,6 +7,7 @@ import {
 } from '../topology/geodesic';
 import { createSeededNoise3D, hashText } from './seededNoise';
 import { ContinentalStructure, type ContinentalStructureDiagnostics } from './continentalStructure';
+import { MountainStructure, type MountainStructureDiagnostics } from './mountainStructure';
 
 export const PROCEDURAL_WORLD_FORMAT_VERSION = 1 as const;
 export const PROCEDURAL_WORLD_GENERATOR_VERSION = '1.1.0';
@@ -71,6 +72,8 @@ export interface ProceduralWorldCell {
   readonly macroRegion: ProceduralMacroRegion;
   readonly isShelf: boolean;
   readonly isInlandBasin: boolean;
+  readonly mountainRangeId: string | null;
+  readonly mountainInfluence: number;
 }
 
 export interface ProceduralWorld {
@@ -81,6 +84,7 @@ export interface ProceduralWorld {
   readonly cellCount: number;
   readonly fingerprint: string;
   readonly macroStructure: ContinentalStructureDiagnostics;
+  readonly mountainStructure: MountainStructureDiagnostics;
   readonly cells: readonly ProceduralWorldCell[];
 }
 
@@ -95,6 +99,9 @@ interface RawCellFields {
   readonly macroRegion: ProceduralMacroRegion;
   readonly macroLandSupport: number;
   readonly basinInfluence: number;
+  readonly mountainRangeId: string | null;
+  readonly mountainInfluence: number;
+  readonly mountainType: string | null;
 }
 
 interface ClassifiedCellFields extends RawCellFields {
@@ -158,7 +165,9 @@ function buildProceduralWorld(
   normalized: ProceduralWorldConfig,
   topology: GeodesicTopology,
 ): ProceduralWorld {
-  const rawCells = createRawFields(normalized, topology);
+  const macroStructure = new ContinentalStructure(normalized.seed, normalized.continentScale);
+  const mountainStructure = new MountainStructure(normalized.seed, macroStructure.diagnostics);
+  const rawCells = createRawFields(normalized, topology, macroStructure, mountainStructure);
   const elevationThreshold = quantile(
     rawCells.map((cell) => cell.rawElevation),
     1 - normalized.landFraction,
@@ -199,8 +208,8 @@ function buildProceduralWorld(
     config: normalized,
     frequency: topology.frequency,
     cellCount: cells.length,
-    macroStructure: new ContinentalStructure(normalized.seed, normalized.continentScale)
-      .diagnostics,
+    macroStructure: macroStructure.diagnostics,
+    mountainStructure: mountainStructure.diagnostics,
     cells,
   };
   return {
@@ -238,6 +247,8 @@ function removeIsolatedSurfaces(
 function createRawFields(
   config: ProceduralWorldConfig,
   topology: GeodesicTopology,
+  structure: ContinentalStructure,
+  mountainStructure: MountainStructure,
 ): RawCellFields[] {
   const continentNoise = createSeededNoise3D(`${config.seed}:continent`);
   const detailNoise = createSeededNoise3D(`${config.seed}:detail`);
@@ -245,13 +256,13 @@ function createRawFields(
   const temperatureNoise = createSeededNoise3D(`${config.seed}:temperature`);
   const moistureNoise = createSeededNoise3D(`${config.seed}:moisture`);
   const coastNoise = createSeededNoise3D(`${config.seed}:coast-shape`);
-  const structure = new ContinentalStructure(config.seed, config.continentScale);
 
   return [...topology.cells]
     .sort((left, right) => left.id.localeCompare(right.id))
     .map((cell) => {
       const { x, y, z } = cell.center;
       const macro = structure.sample(cell.center);
+      const mountain = mountainStructure.sample(cell.center, macro.landSupport);
       const continent = continentNoise.fbm(
         x * config.continentScale,
         y * config.continentScale,
@@ -284,7 +295,9 @@ function createRawFields(
         macroVariation +
         continent * 0.05 +
         detail * config.elevationVariation * 0.08 +
-        ridge * config.mountainStrength * 0.06 -
+        mountain.influence * mountain.ridgeVariation * config.mountainStrength * 0.42 +
+        ridge * config.mountainStrength * 0.03 -
+        (macro.landSupport <= 0.08 ? macro.basinInfluence * 0.08 : 0) -
         latitudePenalty;
       const latitudeTemperature = 1 - Math.abs(y);
       const rawTemperature =
@@ -328,6 +341,9 @@ function createRawFields(
                 : 'ocean',
         macroLandSupport: macro.landSupport,
         basinInfluence: macro.basinInfluence,
+        mountainRangeId: mountain.rangeId,
+        mountainInfluence: mountain.influence,
+        mountainType: mountain.rangeType,
       };
     });
 }
@@ -371,6 +387,8 @@ function classifyCell(
     macroRegion: cell.macroRegion,
     isShelf: cell.isShelf,
     isInlandBasin: cell.isInlandBasin,
+    mountainRangeId: cell.surface === 'land' ? cell.mountainRangeId : null,
+    mountainInfluence: cell.surface === 'land' ? round(cell.mountainInfluence) : 0,
   };
 }
 
@@ -495,7 +513,8 @@ function roundVector(vector: Vector3): Vector3 {
 }
 
 function round(value: number): number {
-  return Math.round(value * 1_000_000) / 1_000_000;
+  const rounded = Math.round(value * 1_000_000) / 1_000_000;
+  return Object.is(rounded, -0) ? 0 : rounded;
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {
