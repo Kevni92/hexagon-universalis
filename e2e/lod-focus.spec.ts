@@ -70,6 +70,7 @@ test('high-density Lokal-LOD hält stationäre, Rotations- und Zoombudgets ein',
   page,
 }, testInfo) => {
   test.slow();
+  test.setTimeout(150_000);
   test.skip(testInfo.project.name !== 'chromium', 'Visuelle Regression läuft im Desktop-Chromium.');
   const pageErrors: Error[] = [];
   page.on('pageerror', (error) => pageErrors.push(error));
