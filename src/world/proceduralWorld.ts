@@ -6,9 +6,10 @@ import {
   type Vector3,
 } from '../topology/geodesic';
 import { createSeededNoise3D, hashText } from './seededNoise';
+import { ContinentalStructure, type ContinentalStructureDiagnostics } from './continentalStructure';
 
 export const PROCEDURAL_WORLD_FORMAT_VERSION = 1 as const;
-export const PROCEDURAL_WORLD_GENERATOR_VERSION = '1.0.0';
+export const PROCEDURAL_WORLD_GENERATOR_VERSION = '1.1.0';
 
 export type ProceduralDensityProfileId = 'low' | 'standard' | 'high' | 'ultra';
 
@@ -51,6 +52,7 @@ export type ProceduralSurface = 'land' | 'water';
 export type ProceduralReliefBand =
   'deepSea' | 'oceanFloor' | 'shallowWater' | 'lowland' | 'hills' | 'mountains' | 'highMountains';
 export type ProceduralQualityFlag = 'coast-derived' | 'polar-climate';
+export type ProceduralMacroRegion = 'continent' | 'island' | 'ocean' | 'ocean-basin';
 
 export interface ProceduralWorldCell {
   readonly cellId: string;
@@ -66,6 +68,9 @@ export interface ProceduralWorldCell {
   readonly modifiers: readonly TileModifier[];
   readonly relief: ProceduralReliefBand;
   readonly qualityFlags: readonly ProceduralQualityFlag[];
+  readonly macroRegion: ProceduralMacroRegion;
+  readonly isShelf: boolean;
+  readonly isInlandBasin: boolean;
 }
 
 export interface ProceduralWorld {
@@ -75,6 +80,7 @@ export interface ProceduralWorld {
   readonly frequency: number;
   readonly cellCount: number;
   readonly fingerprint: string;
+  readonly macroStructure: ContinentalStructureDiagnostics;
   readonly cells: readonly ProceduralWorldCell[];
 }
 
@@ -86,11 +92,16 @@ interface RawCellFields {
   readonly rawElevation: number;
   readonly rawTemperature: number;
   readonly rawMoisture: number;
+  readonly macroRegion: ProceduralMacroRegion;
+  readonly macroLandSupport: number;
+  readonly basinInfluence: number;
 }
 
 interface ClassifiedCellFields extends RawCellFields {
   readonly elevation: number;
   readonly surface: ProceduralSurface;
+  readonly isShelf: boolean;
+  readonly isInlandBasin: boolean;
 }
 
 export function normalizeProceduralWorldConfig(
@@ -154,8 +165,14 @@ function buildProceduralWorld(
   );
   const minimumElevation = Math.min(...rawCells.map((cell) => cell.rawElevation));
   const maximumElevation = Math.max(...rawCells.map((cell) => cell.rawElevation));
+  const initialSurfaces = new Map(
+    rawCells.map(
+      (cell) => [cell.cellId, cell.rawElevation >= elevationThreshold ? 'land' : 'water'] as const,
+    ),
+  );
+  const surfaces = removeIsolatedSurfaces(rawCells, initialSurfaces);
   const classified = rawCells.map((cell) => {
-    const isLand = cell.rawElevation >= elevationThreshold;
+    const isLand = surfaces.get(cell.cellId) === 'land';
     return {
       ...cell,
       elevation: round(
@@ -168,6 +185,10 @@ function buildProceduralWorld(
             ),
       ),
       surface: isLand ? 'land' : 'water',
+      isShelf:
+        Math.abs(cell.rawElevation - elevationThreshold) <= 0.09 &&
+        cell.macroLandSupport > elevationThreshold - 0.12,
+      isInlandBasin: isLand && cell.basinInfluence >= 0.42 && cell.macroRegion !== 'island',
     } satisfies ClassifiedCellFields;
   });
   const surfacesById = new Map(classified.map((cell) => [cell.cellId, cell.surface]));
@@ -178,6 +199,8 @@ function buildProceduralWorld(
     config: normalized,
     frequency: topology.frequency,
     cellCount: cells.length,
+    macroStructure: new ContinentalStructure(normalized.seed, normalized.continentScale)
+      .diagnostics,
     cells,
   };
   return {
@@ -198,6 +221,20 @@ export function validateProceduralWorldConfig(config: ProceduralWorldConfig): vo
   assertRange(config.mountainStrength, 0, 1, 'Gebirgsstärke');
 }
 
+function removeIsolatedSurfaces(
+  cells: readonly RawCellFields[],
+  surfaces: ReadonlyMap<string, ProceduralSurface>,
+): Map<string, ProceduralSurface> {
+  const repaired = new Map(surfaces);
+  for (const cell of cells) {
+    const surface = repaired.get(cell.cellId);
+    if (surface === undefined) continue;
+    if (cell.neighborIds.some((neighborId) => repaired.get(neighborId) === surface)) continue;
+    repaired.set(cell.cellId, surface === 'land' ? 'water' : 'land');
+  }
+  return repaired;
+}
+
 function createRawFields(
   config: ProceduralWorldConfig,
   topology: GeodesicTopology,
@@ -207,11 +244,14 @@ function createRawFields(
   const ridgeNoise = createSeededNoise3D(`${config.seed}:ridge`);
   const temperatureNoise = createSeededNoise3D(`${config.seed}:temperature`);
   const moistureNoise = createSeededNoise3D(`${config.seed}:moisture`);
+  const coastNoise = createSeededNoise3D(`${config.seed}:coast-shape`);
+  const structure = new ContinentalStructure(config.seed, config.continentScale);
 
   return [...topology.cells]
     .sort((left, right) => left.id.localeCompare(right.id))
     .map((cell) => {
       const { x, y, z } = cell.center;
+      const macro = structure.sample(cell.center);
       const continent = continentNoise.fbm(
         x * config.continentScale,
         y * config.continentScale,
@@ -238,10 +278,13 @@ function createRawFields(
       );
       const ridge = Math.pow(1 - Math.abs(ridgeSample), 3);
       const latitudePenalty = Math.abs(y) * 0.06;
+      const macroVariation = coastNoise.fbm(x * 2.7, y * 2.7, z * 2.7, 3, 2.05, 0.5) * 0.12;
       const rawElevation =
-        continent * 0.78 +
-        detail * config.elevationVariation * 0.22 +
-        ridge * config.mountainStrength * 0.12 -
+        macro.landSupport * 0.88 +
+        macroVariation +
+        continent * 0.05 +
+        detail * config.elevationVariation * 0.08 +
+        ridge * config.mountainStrength * 0.06 -
         latitudePenalty;
       const latitudeTemperature = 1 - Math.abs(y);
       const rawTemperature =
@@ -275,6 +318,16 @@ function createRawFields(
         rawElevation,
         rawTemperature,
         rawMoisture,
+        macroRegion:
+          macro.basinInfluence >= 0.45
+            ? 'ocean-basin'
+            : macro.continentInfluence >= macro.islandInfluence && macro.continentInfluence > 0.2
+              ? 'continent'
+              : macro.islandInfluence > 0.2
+                ? 'island'
+                : 'ocean',
+        macroLandSupport: macro.landSupport,
+        basinInfluence: macro.basinInfluence,
       };
     });
 }
@@ -290,7 +343,14 @@ function classifyCell(
   const temperature = round(clamp(cell.rawTemperature - Math.max(cell.elevation, 0) * 0.34, 0, 1));
   const moisture = round(clamp(cell.rawMoisture + coastalMoisture, 0, 1));
   const relief = classifyRelief(cell.elevation);
-  const visual = classifyVisualTile(cell.surface, isCoast, cell.elevation, temperature, moisture);
+  const visual = classifyVisualTile(
+    cell.surface,
+    isCoast,
+    cell.elevation,
+    temperature,
+    moisture,
+    cell.isShelf,
+  );
   const qualityFlags: ProceduralQualityFlag[] = [];
   if (isCoast) qualityFlags.push('coast-derived');
   if (Math.abs(cell.center.y) >= 0.92) qualityFlags.push('polar-climate');
@@ -308,6 +368,9 @@ function classifyCell(
     modifiers: visual.modifiers,
     relief,
     qualityFlags,
+    macroRegion: cell.macroRegion,
+    isShelf: cell.isShelf,
+    isInlandBasin: cell.isInlandBasin,
   };
 }
 
@@ -317,11 +380,13 @@ function classifyVisualTile(
   elevation: number,
   temperature: number,
   moisture: number,
+  isShelf: boolean,
 ): {
   readonly tileType: TileType;
   readonly modifiers: readonly TileModifier[];
 } {
   if (surface === 'water') {
+    if (isShelf && !isCoast) return { tileType: 'shelfWater', modifiers: [] };
     if (temperature < 0.13 && elevation > -0.32) return { tileType: 'iceWater', modifiers: [] };
     if (elevation <= -0.62) return { tileType: 'deepSea', modifiers: [] };
     if (elevation <= -0.22) return { tileType: 'ocean', modifiers: [] };
@@ -348,7 +413,7 @@ function classifyVisualTile(
       tileType: temperature > 0.42 && moisture < 0.7 ? 'sandCoast' : 'rockyCoast',
       modifiers: uniqueModifiers(modifiers),
     };
-  if (moisture > 0.74 && elevation < 0.24) {
+  if (moisture > 0.68 && elevation < 0.24) {
     modifiers.push('wet');
     return {
       tileType: temperature > 0.76 ? 'mangrove' : 'wetland',
