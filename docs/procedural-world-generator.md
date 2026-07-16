@@ -41,25 +41,25 @@ adressieren kann.
 - Mehrere fBm-Frequenzbänder erzeugen Kontinente, lokale Höhenvariation, Gebirgsrücken, Temperatur und Feuchtigkeit.
 - Noise wird direkt an normalisierten 3D-Zellmittelpunkten abgetastet. Dadurch gibt es weder eine Längengradnaht noch polare Sonderfälle.
 - Der gewünschte Landanteil bestimmt eine Quantilschwelle des zusammenhängenden Höhenfeldes.
-- Temperatur berücksichtigt Breitengrad und Höhenabnahme; Feuchtigkeit stammt aus einem getrennten kohärenten Feld und erhält an Landküsten einen kleinen Zuschlag.
+- Temperatur berücksichtigt Breitengrad und Höhenabnahme; Feuchtigkeit wird im versionierten Klimamodul aus Küstennähe, Seen, Einzugsgebieten, Gebirgsaufstieg und Regenschatten abgeleitet.
 - Tile-Typen und Modifikatoren werden deterministisch aus Wasserstand, Höhe, Temperatur, Feuchtigkeit und Nachbarschaft abgeleitet.
 - Alle öffentlichen Fließkommawerte werden auf sechs Dezimalstellen stabilisiert. Zellen werden vor Ausgabe kanonisch nach ID sortiert.
 
 ## Reproduzierbarkeit
 
-Generatorformat `1` und Generatorversion `1.0.0` sind Teil des Weltmodells. Gleiche Version, Konfiguration und Topologie erzeugen dieselbe JSON-Reihenfolge und denselben Fingerprint. Änderungen am Algorithmus müssen die Generatorversion erhöhen, sofern vorhandene Seeds danach andere Welten erzeugen.
+Generatorformat `1` und Generatorversion `1.1.0` sind Teil des Weltmodells. Gleiche Version, Konfiguration und Topologie erzeugen dieselbe JSON-Reihenfolge und denselben Fingerprint. Änderungen am Algorithmus müssen die Generatorversion erhöhen, sofern vorhandene Seeds danach andere Welten erzeugen.
 
 Folgende Referenz-Fingerprints werden durch Unit-Tests geschützt:
 
 | Seed              | Dichte     | Fingerprint    |
 | ----------------- | ---------- | -------------- |
-| `reference-alpha` | `low`      | `pw1-b493a193` |
-| `reference-alpha` | `standard` | `pw1-2c95e43d` |
-| `reference-beta`  | `low`      | `pw1-479f6748` |
-| `reference-beta`  | `standard` | `pw1-f2419ef2` |
+| `reference-alpha` | `low`      | `pw1-245f9efa` |
+| `reference-alpha` | `standard` | `pw1-f493331d` |
+| `reference-beta`  | `low`      | `pw1-59ec331e` |
+| `reference-beta`  | `standard` | `pw1-5fa17418` |
 
 ## Fachliche Ausgabe pro Zelle
 
-Jede Zelle enthält stabile ID, Zentrum, Nachbarschaften, Pentagon-/Hexagonstatus, normalisierte Höhe beziehungsweise Tiefe, Land-/Wasser- und Küstenstatus, Temperatur, Feuchtigkeit, visuellen Tile-Typ, Relief-/Schnee-/Eismodifikatoren, Reliefband und Qualitätsflags.
+Jede Zelle enthält stabile ID, Zentrum, Nachbarschaften, Pentagon-/Hexagonstatus, normalisierte Höhe beziehungsweise Tiefe, Land-/Wasser- und Küstenstatus, Temperatur, Feuchtigkeit, Küstendistanz, Wassernähe, Regenschatten, visuellen Tile-Typ, Relief-/Schnee-/Eismodifikatoren, Reliefband, Hydrologie und Qualitätsflags.
 
 Das Modell importiert keine Three.js-Typen und kann direkt mit `JSON.stringify` serialisiert werden.
