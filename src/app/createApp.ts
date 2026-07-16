@@ -1,4 +1,4 @@
-import { SceneRenderer, type WorldMode } from '@/rendering/SceneRenderer';
+import { SceneRenderer, type ProceduralProgress, type WorldMode } from '@/rendering/SceneRenderer';
 import {
   DEFAULT_PROCEDURAL_WORLD_CONFIG,
   PROCEDURAL_DENSITY_PROFILES,
@@ -60,6 +60,18 @@ export function createApp(root: HTMLElement, locationSearch = window.location.se
       <p id="status" class="status" data-testid="app-status" role="status" aria-live="polite">${statusForWorldMode(worldMode)}</p>
       </header>
       <section class="viewport" data-testid="globe-viewport" aria-label="Interaktive 3D-Testszene"></section>
+      ${
+        worldMode === 'procedural'
+          ? `<div class="procedural-loading" data-testid="procedural-loading" hidden aria-hidden="true">
+              <div class="procedural-loading-card" role="status" aria-live="polite">
+                <p class="eyebrow">Experimentelles Ultra-Profil</p>
+                <h2>Welt wird vorbereitet</h2>
+                <progress data-testid="procedural-loading-progress" max="1" value="0"></progress>
+                <p data-testid="procedural-loading-message">Welt wird vorbereitet …</p>
+              </div>
+            </div>`
+          : ''
+      }
       ${worldMode === 'procedural' ? '<div class="world-controls-host"></div>' : ''}
     </main>
   `;
@@ -92,6 +104,7 @@ export function createApp(root: HTMLElement, locationSearch = window.location.se
               latestProceduralState = state;
               proceduralControls?.update(state);
             },
+            onProceduralProgress: (progress) => updateProceduralLoading(root, progress),
           }
         : undefined,
     );
@@ -138,4 +151,27 @@ function updateProceduralUrl(config: ProceduralWorldConfig): void {
   url.searchParams.set('seed', config.seed);
   url.searchParams.set('density', config.density);
   window.history.replaceState(null, '', url);
+}
+
+function updateProceduralLoading(root: HTMLElement, progress: ProceduralProgress): void {
+  const overlay = root.querySelector<HTMLElement>('[data-testid="procedural-loading"]');
+  const progressBar = root.querySelector<HTMLProgressElement>(
+    '[data-testid="procedural-loading-progress"]',
+  );
+  const message = root.querySelector<HTMLElement>('[data-testid="procedural-loading-message"]');
+  if (overlay === null || progressBar === null || message === null) return;
+
+  if (progress.phase === 'preparing') {
+    const total = Math.max(progress.total, 1);
+    progressBar.max = total;
+    progressBar.value = Math.min(progress.completed, total);
+    message.textContent = progress.message;
+    overlay.hidden = false;
+    overlay.setAttribute('aria-hidden', 'false');
+    return;
+  }
+
+  overlay.hidden = true;
+  overlay.setAttribute('aria-hidden', 'true');
+  if (progress.phase === 'error') message.textContent = progress.message;
 }

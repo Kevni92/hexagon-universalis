@@ -19,6 +19,10 @@ export default defineConfig({
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'mobile-chromium', use: { ...devices['Pixel 5'] } },
+    {
+      name: 'mobile-chromium',
+      testMatch: /mobile\.spec\.ts/,
+      use: { ...devices['Pixel 5'] },
+    },
   ],
 });

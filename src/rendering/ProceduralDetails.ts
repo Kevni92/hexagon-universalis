@@ -81,8 +81,8 @@ export function createProceduralDetailPlan(
   };
 
   for (const unit of [...units].sort((left, right) => left.key.localeCompare(right.key))) {
-    const level = levelName(unit.level);
-    if (level !== 'local') continue;
+    const level = unit.worldLevel ?? levelName(unit.level);
+    if (level !== 'local' && level !== 'detail') continue;
     const entries = unit.cells
       .map((lodCell, index) => {
         const cellId = visibleCellId(unit, index);
@@ -182,7 +182,10 @@ export class ProceduralDetailRenderer {
     worldFingerprint: string,
   ): void {
     if (this.disposed) throw new Error('ProceduralDetailRenderer wurde bereits disposed.');
-    const localUnits = units.filter((unit) => unit.level === 2);
+    const localUnits = units.filter((unit) => {
+      const level = unit.worldLevel ?? levelName(unit.level);
+      return level === 'local' || level === 'detail';
+    });
     if (localUnits.length === 0) {
       if (this.worldFingerprint !== '' && this.worldFingerprint !== worldFingerprint) {
         this.disposeMeshes();
@@ -380,8 +383,11 @@ function detailScale(detailType: DetailType): number {
   return 0.48;
 }
 
-function levelName(level: 0 | 1 | 2): ProceduralWorldLodLevel {
-  return (['global', 'regional', 'local'] as const)[level];
+function levelName(level: 0 | 1 | 2 | 3): ProceduralWorldLodLevel {
+  if (level === 3) return 'detail';
+  if (level === 2) return 'local';
+  if (level === 1) return 'regional';
+  return 'global';
 }
 
 function dot(first: Vector3, second: Vector3): number {

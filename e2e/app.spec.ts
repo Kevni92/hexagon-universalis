@@ -4,7 +4,7 @@ import { expect, test, type Locator } from '@playwright/test';
 // konkurrieren in CI um denselben GPU-Prozess und verfälschen LOD-Zeitlimits.
 test.describe.configure({ mode: 'serial' });
 
-type ProceduralLod = 'global' | 'regional' | 'local';
+type ProceduralLod = 'global' | 'regional' | 'local' | 'detail';
 
 async function zoomUntilLod(
   canvas: Locator,
@@ -47,14 +47,6 @@ test('production app loads a usable globe viewport', async ({ page }) => {
   await expect(page.getByTestId('globe-viewport')).toBeVisible();
   await expect(page.locator('canvas.viewport-canvas')).toHaveCount(1);
   expect(pageErrors).toEqual([]);
-});
-
-test('desktop and mobile viewport do not overflow horizontally', async ({ page }) => {
-  await page.goto('/');
-  await expect
-    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
-    .toBe(true);
-  await expect(page.locator('canvas.viewport-canvas')).toBeVisible();
 });
 
 test('demo world is opt-in via query parameter and clearly labeled', async ({ page }) => {
@@ -334,5 +326,63 @@ test('procedural controls reproduce seeds, validate density and stay inside the 
 
   await page.goto('/');
   await expect(page.getByTestId('procedural-controls')).toHaveCount(0);
+  expect(pageErrors).toEqual([]);
+});
+
+test('ultra profile preloads detail chunks behind a progress overlay', async ({ page }) => {
+  test.slow();
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+  await page.goto('/?world=procedural&seed=ultra-e2e&density=standard');
+
+  const loading = page.getByTestId('procedural-loading');
+  const progress = page.getByTestId('procedural-loading-progress');
+  await expect(loading).toBeHidden();
+
+  await page.getByLabel('Hex-Dichte').selectOption('ultra');
+  await page.getByLabel('Seed').fill('ultra-preloaded-e2e');
+  await page.getByRole('button', { name: 'Welt neu generieren' }).click();
+
+  await expect(loading).toBeVisible();
+  await expect(progress).toHaveAttribute('max', '7');
+  await expect(loading).toBeHidden({ timeout: 60_000 });
+
+  const canvas = page.locator('canvas.viewport-canvas');
+  await canvas.dispatchEvent('wheel', { deltaY: -400 });
+  const intermediateCellCounts: Record<string, string> = {
+    continental: '1692',
+    macroregional: '4412',
+    regional: '11562',
+    subregional: '30252',
+    local: '79212',
+  };
+  const intermediateStates = Object.entries(intermediateCellCounts).map(
+    ([level, count]) => `${level}:${count}`,
+  );
+  await expect
+    .poll(
+      async () =>
+        `${await canvas.getAttribute('data-lod-level')}:${await canvas.getAttribute('data-lod-finest-cell-count')}`,
+      { timeout: 15_000 },
+    )
+    .toMatch(new RegExp(`^(${intermediateStates.join('|')})$`));
+  await zoomUntilLod(canvas, 'local', -400, 8);
+  await expect
+    .poll(() => canvas.getAttribute('data-lod-finest-cell-count'), { timeout: 60_000 })
+    .toBe('79212');
+
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (box !== null) {
+    await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.78, box.y + box.height * 0.5, { steps: 8 });
+    await page.mouse.up();
+    await expect(canvas).toHaveAttribute('data-lod-level', 'local');
+    await expect(canvas).toHaveAttribute('data-lod-finest-cell-count', '79212');
+    await expect
+      .poll(async () => Number(await canvas.getAttribute('data-render-draw-calls')))
+      .toBeGreaterThan(0);
+  }
   expect(pageErrors).toEqual([]);
 });

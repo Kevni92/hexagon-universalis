@@ -32,7 +32,7 @@ function lookupFor(
         {
           cellId,
           sourceCellId: `source-${index}`,
-          level: (['global', 'regional', 'local'] as const)[unitValue.level],
+          level: unitValue.level === 2 ? 'local' : unitValue.level === 1 ? 'regional' : 'global',
           elevation: surface === 'land' ? 0.32 : -0.4,
           surface,
           isCoast: false,

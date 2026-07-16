@@ -41,6 +41,12 @@ materialisiert werden.
 Das Panel bietet ausschließlich diese diskreten Profile an. Die feineren Regional-/Lokalbudgets
 und ihre Zellzahlen sind in [procedural-world-lod.md](./procedural-world-lod.md) dokumentiert.
 
+Beim Start einer Ultra-Neugenerierung werden die 32 initialen Detail-Chunks
+asynchron vorbereitet. Währenddessen liegt ein halbtransparentes Loading-Overlay
+über dem Viewport und zeigt den Chunkfortschritt. Erst nach erfolgreicher
+Materialisierung wird das Overlay entfernt; beim anschließenden Zoomen werden
+die vorbereiteten Detail-Chunks aus dem Cache verwendet.
+
 ## Zustands- und Lebenszyklusmodell
 
 - Eingabewerte werden erst mit **Welt neu generieren** aktiv.
