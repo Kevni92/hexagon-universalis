@@ -352,7 +352,7 @@ test('ultra profile preloads detail chunks behind a progress overlay', async ({ 
   await page.getByRole('button', { name: 'Welt neu generieren' }).click();
 
   await expect(loading).toBeVisible();
-  await expect(progress).toHaveAttribute('max', '12');
+  await expect(progress).toHaveAttribute('max', '7');
   await expect(loading).toBeHidden({ timeout: 60_000 });
 
   const canvas = page.locator('canvas.viewport-canvas');

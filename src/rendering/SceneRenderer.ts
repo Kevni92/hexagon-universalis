@@ -10,7 +10,7 @@ import { EarthChunkRuntime, type EarthRuntimeStatus } from '@/data/EarthChunkRun
 import { EarthWorldModel } from '@/data/EarthWorldModel';
 import { ProceduralWorldLod, type ProceduralWorldLodLevel } from '@/world/proceduralWorldLod';
 import type { ProceduralWorldConfig } from '@/world/proceduralWorld';
-import { ULTRA_PRELOAD_STAGE_WORK } from '@/topology/lod/ultraDetail';
+import { ULTRA_INTERACTIVE_MAX_LEVEL, ULTRA_PRELOAD_STAGE_WORK } from '@/topology/lod/ultraDetail';
 
 import { createCellGlobeMesh } from './CellGlobe';
 import { ChunkRenderer, LOD_TRANSITION_DURATION_SECONDS } from './ChunkRenderer';
@@ -270,7 +270,7 @@ export class SceneRenderer {
       return current;
     }
     const targetIsUltra = (config.density ?? this.proceduralWorldLod.config.density) === 'ultra';
-    const progressTotal = targetIsUltra ? ULTRA_PRELOAD_STAGE_WORK * 2 : 1;
+    const progressTotal = targetIsUltra ? ULTRA_PRELOAD_STAGE_WORK + 1 : 1;
     this.proceduralOptions.onProceduralProgress?.({
       phase: 'preparing',
       completed: 0,
@@ -299,15 +299,18 @@ export class SceneRenderer {
               message: 'Welt wird vorbereitet â€¦',
             });
           }));
+      const preloadedUnits = targetIsUltra
+        ? preparedUnits.filter((unit) => unit.worldLevel === ULTRA_INTERACTIVE_MAX_LEVEL)
+        : preparedUnits;
       this.chunkRenderer.setCellColors(this.proceduralWorldLod.cellColors, this.visibleUnits);
-      if (preparedUnits.length > 0 && this.proceduralDetails !== null) {
+      if (preloadedUnits.length > 0 && this.proceduralDetails !== null) {
         this.proceduralDetails.update(
-          preparedUnits,
+          preloadedUnits,
           (cellId) => this.proceduralWorldLod?.projectedCell(cellId),
           this.proceduralWorldLod.fingerprint,
         );
         this.proceduralDetails.group.visible = false;
-        await this.chunkRenderer.preload(preparedUnits, (progress) => {
+        await this.chunkRenderer.preload(preloadedUnits, (progress) => {
           this.proceduralOptions.onProceduralProgress?.({
             phase: 'preparing',
             completed: targetIsUltra
