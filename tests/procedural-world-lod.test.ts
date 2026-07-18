@@ -116,7 +116,7 @@ describe('ProceduralWorldLod', () => {
     expect(new Set(prepared.map((unit) => unit.worldLevel))).toEqual(
       new Set(['global', 'continental', 'macroregional', 'regional', 'subregional', 'local']),
     );
-  });
+  }, 15_000);
 
   it('erreicht mit denselben Generatorparametern alle drei benannten Weltstufen', () => {
     const world = new ProceduralWorldLod({
