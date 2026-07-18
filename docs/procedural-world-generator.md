@@ -47,7 +47,7 @@ adressieren kann.
 
 ## Reproduzierbarkeit
 
-Generatorformat `1` und Generatorversion `1.1.0` sind Teil des Weltmodells. Gleiche Version, Konfiguration und Topologie erzeugen dieselbe JSON-Reihenfolge und denselben Fingerprint. Änderungen am Algorithmus müssen die Generatorversion erhöhen, sofern vorhandene Seeds danach andere Welten erzeugen.
+Generatorformat `1` und Generatorversion `1.2.0` sind Teil des Weltmodells. Gleiche Version, Konfiguration und Topologie erzeugen dieselbe JSON-Reihenfolge und denselben Fingerprint. Änderungen am Algorithmus müssen die Generatorversion erhöhen, sofern vorhandene Seeds danach andere Welten erzeugen.
 
 Folgende Referenz-Fingerprints werden durch Unit-Tests geschützt:
 
